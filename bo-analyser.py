@@ -2,6 +2,8 @@ import argparse
 import ast
 import json
 
+import utils
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('program', help="Which program should be analyzed?")
@@ -11,9 +13,8 @@ def main():
     
     # Parse the program to an AST
     a = ast.literal_eval(open(parsed.program).read())
-    print(a)
-    tree = ast.parse(open(parsed.program).read())
-    print(tree)
+
+    print(utils.getCallsWithID(a, "execute"))
     #for node in ast.walk(tree):
     #    print(node)
     
