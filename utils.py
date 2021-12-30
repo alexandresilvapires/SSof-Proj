@@ -155,6 +155,37 @@ def getTargetIDInAssignment(tree):
         vars.append(t["id"])
     return vars
 
+def getFunctionNameFromCall(tree):
+    """Given a tree that is a call, returns the name of the function called"""
+    
+    #Check for calls like a.func()
+    atr = getNodesOfType(tree,"Attribute")
+    if(atr != []):
+        return atr[0]["id"]
+    #Check for calls like func()
+    else:
+        return tree["func"]["id"]
+
+def getVarsUsedAsValue(tree):
+    """ Given a tree that is an assignment, returns the list of variable ids used
+        in the assignment, INCLUDING VARS USED AS FUNCTION ARGS"""
+        
+    # Terrible way to do this, get every named node, get every name that is from a function
+    # and return the remaining names
+    names = []
+    
+    funcCalls = getNodesOfType(tree["value"], "Call")
+    funcNames = []
+    for c in funcCalls:
+        funcNames.append(getFunctionNameFromCall(c))
+    
+    nameNodes = getNodesOfType(tree["value"],"Name")
+    for n in nameNodes:
+        if(n["id"] not in funcNames and n[id] not in names):
+            names.append(n["id"])
+            
+    return names
+
 def removeDupesFromList(l):
     return list(set(l))
 
@@ -168,35 +199,48 @@ def trackTaint(tree, entry_points, sanitization, sinks):
     
     #TODO: CHECK FOR SANITIZATION!!!
     
-    #Check if assigned value was entry point or tainted vars and add to list
     for a in assigns:
-        #Check if any entry points where called
+        tainted = 0         # turns into a different value if a entry point or 
+                            # tainted var is used in assignment
+
+        calls = getNodesOfType(a, "Call")
+        calledIDs = []
+
+        for c in calls:
+            calledIDs.append(getFunctionNameFromCall(c))
+            
+        varIDs = getVarsUsedAsValue(a)
+        
+        #Check if assigned value was entry point or tainted vars and add to list
         for e in entry_points:
             # If any was, add each target to the list of tainted vars
-            if(getCallsWithID(a, e)):
-                tainted_vars = tainted_vars + getTargetIDInAssignment(a)
+            if(e in calledIDs):
+                tainted += 1
+                tainted_vars += getTargetIDInAssignment(a)
                 tainted_vars = removeDupesFromList(tainted_vars)
 
-        for t in tainted_vars:
-            # Check for any vars that were attributed the value of a tainted var
-            tainted_vars = tainted_vars + getVarsAssinedAsTargetWithID(a, t)
-            
-            # Check for any vars that were attributed the value of a function whose args were tainted
-            calls = getNodesOfType(a, "Call")
-            for c in calls:
-                args = getArgsIDFromCall(c)
-                if(t in args):
-                    tainted_vars = tainted_vars + getTargetIDInAssignment(a)
-                    tainted_vars = removeDupesFromList(tainted_vars)
-            
-            
-    
-    #Check if any of the tainted values ever reached a sink
-    #TODO: THIS DOES NOT TAKE IN CONSIDERATION ORDER; SHOULD BE INSIDE FORS OF ASSIGNS WITH LINE CONSIDERATION
-    calls = getNodesOfType(tree, "Call")
-    for c in calls:
-        args = getArgsIDFromCall(c)
-        for t in tainted_vars:
-            if(t in args):
-                return True
+
+        # Check for any vars that were attributed the value of a tainted var (even if as arg)
+        for v in varIDs:
+            if(v in tainted_vars):
+                tainted += 1
+                tainted_vars += getVarsAssinedAsTargetWithID(a, v)
+                tainted_vars = removeDupesFromList(tainted_vars)
+                    
+        #If any tainted var is assigned a non tainted value, it is no longer tainted
+        if(tainted == 0):
+            for value in getTargetIDInAssignment(a):
+                if(value in tainted_vars):
+                    tainted_vars.remove(value)
+        
+        #If any tainted var is given as an argument for a sink, return true
+        for sink in sinks:
+            if(sink in calledIDs):
+                call = getCallsWithID(a, sink)
+                sink_args = getArgsIDFromCall(call)
+                
+                for t in tainted_vars:
+                    if(t in sink_args):
+                        return True
+
     return False
