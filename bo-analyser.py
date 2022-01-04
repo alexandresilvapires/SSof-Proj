@@ -12,26 +12,28 @@ def main():
     parsed = parser.parse_args()
     
     # Parse the program to an AST
-    a = ast.literal_eval(open(parsed.program).read())
-
-    print(utils.getCallsWithID(a, "execute"))
-    #for node in ast.walk(tree):
-    #    print(node)
+    tree = ast.literal_eval(open(parsed.program).read())
     
     # Get a list of dictionaries with each vulnerability
     vulnerability = json.load(open(parsed.patterns))
+    
+    caughtVuns = []
     
     # For each vulnerability, mark each field of the AST based on if they are a sink, sanitizer or source
     # Then go through the AST to check what flows happen
     for v in vulnerability:
         print("Testing program for vulnerability",v['vulnerability'])
-        print("Creating decorated program AST")
-        
-        #TODO: Make decorated AST with vuln info
         
         print("Checking information flows")
         
-        #TODO cenas de ver os flows
+        #TODO: check sanitized and unsanitized flows
+        source, sink = utils.trackTaint(tree, v["sources"], v["sanitizers"], v["sinks"])
+        if(source != None):
+            #TODO: FIX FOR REAL UNSANITIZED FLOWS
+            caughtVuns.append({"vulnerability":v["vulnerability"], "source":source, "sink":sink, 
+                                "unsanitized flows": "yes", "sanitized flows":[]})
+            
+    print(caughtVuns)
 
 if __name__ == '__main__':
     main()
