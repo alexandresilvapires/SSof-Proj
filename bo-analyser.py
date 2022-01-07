@@ -26,11 +26,13 @@ def main():
         
         print("Checking information flows")
         
-        #TODO: check sanitized and unsanitized flows
-        source, sink = utils.trackTaint(tree, v["sources"], v["sanitizers"], v["sinks"])
+        source, sink, sanit = utils.trackTaint(tree, v["sources"], v["sanitizers"], v["sinks"])
         if(source != None):
-            #TODO: FIX FOR REAL UNSANITIZED FLOWS
-            caughtVuns.append({"vulnerability":v["vulnerability"], "source":source, "sink":sink, 
+            if(sanit):
+                caughtVuns.append({"vulnerability":v["vulnerability"], "source":source, "sink":sink, 
+                                "unsanitized flows": "no", "sanitized flows":[]})
+            else:
+                caughtVuns.append({"vulnerability":v["vulnerability"], "source":source, "sink":sink, 
                                 "unsanitized flows": "yes", "sanitized flows":[]})
             
     print(caughtVuns)

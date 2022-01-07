@@ -193,9 +193,12 @@ def removeDupesFromList(l):
 
 def trackTaint(tree, entry_points, sanitization, sinks):
     """ Given a list of entry points, sanitization functions and sinks,
-        returns true if any reached the sinks.
-        Only checks explicit flows (?)"""
-    tainted_vars = []
+        returns the vunerability, the source, the sink, and if it the source was sanitized 
+        Only checks explicit flows"""
+        
+    # Dictionary with tainted vars. Each var is associated with a bool
+    # Where it is true if the var has been sanitized
+    tainted_vars = {}
     
     assigns = getNodesOfType(tree, "Assign")
     
@@ -209,7 +212,7 @@ def trackTaint(tree, entry_points, sanitization, sinks):
 
         calls = getNodesOfType(a, "Call")
         calledIDs = []
-
+        
         for c in calls:
             calledIDs.append(getFunctionNameFromCall(c))
             
@@ -222,24 +225,47 @@ def trackTaint(tree, entry_points, sanitization, sinks):
             # If any was, add each target to the list of tainted vars
             if(e in calledIDs):
                 tainted += 1
-                tainted_vars += targetIDs
-                tainted_vars = removeDupesFromList(tainted_vars)
 
 
         # Check for any vars that were attributed the value of a tainted var (even if as arg)
         for v in varIDs:
             if(v in tainted_vars):
                 tainted += 1
-                tainted_vars += targetIDs
-                tainted_vars = removeDupesFromList(tainted_vars)
                 
-        print("tainted vars:", tainted_vars)
-                    
-        #If any tainted var is assigned a non tainted value, it is no longer tainted
-        if(tainted == 0):
-            for value in targetIDs:
-                if(value in tainted_vars):
-                    tainted_vars.remove(value)
+                
+        # Check for sanitization:
+        # For every call made, if the arg was tainted, set sanitized bool to true
+        # and lower tainted int, so if tainted == 0 in the end, we can assume only sanitized functions were given
+        isSanitized = False
+        for c in calls:
+            if(getFunctionNameFromCall(c) in sanitization):        
+                for v in varIDs:
+                    if(getFunctionNameFromCall(c) in sanitization and v in getArgsIDFromCall(c)
+                        and v in tainted_vars.keys() and tainted_vars[v] == False):
+                        
+                        isSanitized = True
+                        tainted -= 1
+        
+        
+        # If anything was tainted, add every target ID to the list of tainted vars, as unsanitized
+        if(tainted != 0):
+            for v in targetIDs:
+                if(v not in tainted_vars.keys()):
+                    tainted_vars[v] = False
+            
+        # Update tainted values
+        elif(tainted == 0):
+            if(isSanitized):
+                # If anything is sanitized, and no taints were made (tainted == 0),
+                # then the variables were totally sanitized, 
+                # so every target ID's sanitization value is set to true
+                for v in targetIDs:
+                    tainted_vars[v] = True
+            else:
+                # Every target ID is now clean, as the value attributed is totally clean
+                for value in targetIDs:
+                    if(value in tainted_vars):
+                        tainted_vars.pop(value)
         
         #If any tainted var is given as an argument for a sink, return source and sink
         for sink in sinks:
@@ -250,8 +276,8 @@ def trackTaint(tree, entry_points, sanitization, sinks):
                 for c in call:
                     sink_args += getArgsIDFromCall(c)
                 
-                for t in tainted_vars:
+                for t in tainted_vars.keys():
                     if(t in sink_args):
-                        return t, sink
+                        return t, sink, tainted_vars[t]
 
-    return None, None
+    return None, None, None
