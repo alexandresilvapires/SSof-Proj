@@ -200,11 +200,16 @@ def trackTaint(tree, entry_points, sanitization, sinks):
     # Where it is true if the var has been sanitized
     tainted_vars = {}
     
+    # Keeps track of instantiated variables, since
+    # by default uninstantiated vars are to be considered vunerable
+    instantiated_vars = []
+    
     assigns = getNodesOfType(tree, "Assign")
     
-    #TODO:  CHECK FOR SANITIZATION!!!
-    #       CHECK FOR CHAINED FUNCTIONS
-    #       GIVE CORRECT INPUT
+    #TODO: CHECK FOR CHAINED FUNCTIONS
+    #      ADD CORRECT SOURCE NAME, THERE SHOULD BE A LIST OF TREES THAT TRACK
+    #          TAINT, SO WE CAN FIND THE ORIGINAL VARIABLE
+    #          Eg: a = b (where b is vunerable); sink(a); source should be b!
     
     for a in assigns:
         tainted = 0         # turns into a different value if a entry point or 
@@ -229,9 +234,8 @@ def trackTaint(tree, entry_points, sanitization, sinks):
 
         # Check for any vars that were attributed the value of a tainted var (even if as arg)
         for v in varIDs:
-            if(v in tainted_vars):
+            if(v in tainted_vars or v not in instantiated_vars):
                 tainted += 1
-                
                 
         # Check for sanitization:
         # For every call made, if the arg was tainted, set sanitized bool to true
@@ -266,13 +270,18 @@ def trackTaint(tree, entry_points, sanitization, sinks):
                 for value in targetIDs:
                     if(value in tainted_vars):
                         tainted_vars.pop(value)
+                        
+        # Update list of instantiated values with all the values from the target
+        for v in targetIDs:
+            if(v not in instantiated_vars):
+                instantiated_vars.append(v)
         
-        #If any tainted var is given as an argument for a sink, return source and sink
+        # If any tainted var is given as an argument for a sink, return source and sink
         for sink in sinks:
             if(sink in calledIDs):
                 call = getCallsWithID(a, sink)
                 sink_args = []
-                #can call the sink more than once!
+                # can call the sink more than once!
                 for c in call:
                     sink_args += getArgsIDFromCall(c)
                 
