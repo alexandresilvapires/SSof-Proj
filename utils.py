@@ -223,6 +223,9 @@ def trackTaint(tree, entry_points, sanitization, sinks):
     assigns = getNodesOfType(tree, "Assign")
     
     #TODO: CHECK FOR CHAINED FUNCTIONS
+    #      Check sink outside assignments
+    #           eg: sink(a) 
+    #      Return all possible vuns, not just the first found
     
     for a in assigns:
         tainted = 0         # turns into a different value if a entry point or 
@@ -258,7 +261,7 @@ def trackTaint(tree, entry_points, sanitization, sinks):
             if(getFunctionNameFromCall(c) in sanitization):        
                 for v in varIDs:
                     if(getFunctionNameFromCall(c) in sanitization and v in getArgsIDFromCall(c)
-                        and v in tainted_vars.keys() and tainted_vars[v] == False):
+                        and v in tainted_vars.keys() and tainted_vars[v]["sanitized"] == False):
                         
                         isSanitized = True
                         tainted -= 1
