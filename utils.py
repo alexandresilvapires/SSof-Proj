@@ -226,6 +226,7 @@ def trackTaint(tree, entry_points, sanitization, sinks):
     #      Check sink outside assignments
     #           eg: sink(a) 
     #      Return all possible vuns, not just the first found
+    #      Add sanitized flows (list of sanitization functions used)
     
     for a in assigns:
         tainted = 0         # turns into a different value if a entry point or 
