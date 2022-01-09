@@ -223,9 +223,6 @@ def trackTaint(tree, entry_points, sanitization, sinks):
     assigns = getNodesOfType(tree, "Assign")
     
     #TODO: CHECK FOR CHAINED FUNCTIONS
-    #      ADD CORRECT SOURCE NAME, THERE SHOULD BE A LIST OF TREES THAT TRACK
-    #          TAINT, SO WE CAN FIND THE ORIGINAL VARIABLE
-    #          Eg: a = b (where b is vunerable); sink(a); source should be b!
     
     for a in assigns:
         tainted = 0         # turns into a different value if a entry point or 
