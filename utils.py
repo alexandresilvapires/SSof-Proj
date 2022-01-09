@@ -191,13 +191,29 @@ def getVarsUsedAsValue(tree):
 def removeDupesFromList(l):
     return list(set(l))
 
+
 def trackTaint(tree, entry_points, sanitization, sinks):
     """ Given a list of entry points, sanitization functions and sinks,
         returns the vunerability, the source, the sink, and if it the source was sanitized 
         Only checks explicit flows"""
+
+    def getSourceFromVar(tainted_vars, varID):
+        """ Given a var ID and the tainted_vars dict, returns the source of the taint recursively"""
+        curvar = varID
+        while(tainted_vars[curvar]["source"] != curvar):
+            curvar = tainted_vars[curvar]["source"]
+
+            # Case for uninitialized vars
+            if(curvar not in tainted_vars.keys()):
+                return curvar
+        return curvar
         
-    # Dictionary with tainted vars. Each var is associated with a bool
-    # Where it is true if the var has been sanitized
+    # Dictionary with tainted vars. Each var is associated with a dict, which has:
+    # a bool - "sanitized" - where it is true if the var has been sanitized
+    # a string - "source" - with the source id, that is, the variable that tainted it 
+    #           (if this variable has another source, it gets this value instead, recursively) 
+    #           If the var is not initialized, or the taint comes from a entry point,
+    #           the source is its own ID
     tainted_vars = {}
     
     # Keeps track of instantiated variables, since
@@ -252,10 +268,24 @@ def trackTaint(tree, entry_points, sanitization, sinks):
         
         
         # If anything was tainted, add every target ID to the list of tainted vars, as unsanitized
+        # and add the uninstantiated vars as tainted too
         if(tainted != 0):
+
+            # Used to know who was the source
+            taintedVarForSource = None
+
+            # Add uninstantiated vars to the list 
+            for v in varIDs:
+                if(v not in instantiated_vars and v not in tainted_vars.keys()):
+                    tainted_vars[v] = {"sanitized":False, "source": v}
+                if(v in tainted_vars.keys()):
+                    taintedVarForSource = v
+                
+            taintedVarForSource = getSourceFromVar(tainted_vars, taintedVarForSource)
+
             for v in targetIDs:
                 if(v not in tainted_vars.keys()):
-                    tainted_vars[v] = False
+                    tainted_vars[v] = {"sanitized":False, "source":taintedVarForSource}
             
         # Update tainted values
         elif(tainted == 0):
@@ -264,7 +294,7 @@ def trackTaint(tree, entry_points, sanitization, sinks):
                 # then the variables were totally sanitized, 
                 # so every target ID's sanitization value is set to true
                 for v in targetIDs:
-                    tainted_vars[v] = True
+                    tainted_vars[v]["sanitized"] = True
             else:
                 # Every target ID is now clean, as the value attributed is totally clean
                 for value in targetIDs:
@@ -287,6 +317,6 @@ def trackTaint(tree, entry_points, sanitization, sinks):
                 
                 for t in tainted_vars.keys():
                     if(t in sink_args):
-                        return t, sink, tainted_vars[t]
+                        return tainted_vars[t]["source"], sink, tainted_vars[t]["sanitized"]
 
     return None, None, None
