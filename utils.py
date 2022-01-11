@@ -238,6 +238,10 @@ def track_taint(tree, entry_points, sanitization, sinks):
         Add every target ID to the list of tainted vars, as unsanitized
         and add the uninstantiated vars as tainted too
         """
+
+        #! THIS FUNCTION IS VERY WRONG. taintedVarForSource changes independently
+        #! from the other variables being considered.
+
         # Used to know who was the source
         taintedVarForSource = None
 
@@ -247,6 +251,11 @@ def track_taint(tree, entry_points, sanitization, sinks):
                     tainted_vars[v] = {"sanitized":False, "source": v}
             if v in tainted_vars.keys():
                 taintedVarForSource = v
+
+        #Search for entry points to consider the source
+        for c in called_ids:
+            if c in entry_points:
+                taintedVarForSource = c
         
         if taintedVarForSource:
             taintedVarForSource = getSourceFromVar(tainted_vars, taintedVarForSource)
