@@ -270,7 +270,7 @@ def trackTaint(tree, entry_points, sanitization, sinks):
         
         # If anything was tainted, add every target ID to the list of tainted vars, as unsanitized
         # and add the uninstantiated vars as tainted too
-        if(tainted != 0):
+        if(tainted > 0):
 
             # Used to know who was the source
             taintedVarForSource = None
@@ -281,8 +281,13 @@ def trackTaint(tree, entry_points, sanitization, sinks):
                     tainted_vars[v] = {"sanitized":False, "source": v}
                 if(v in tainted_vars.keys()):
                     taintedVarForSource = v
-                
-            taintedVarForSource = getSourceFromVar(tainted_vars, taintedVarForSource)
+            if(taintedVarForSource != None):
+                taintedVarForSource = getSourceFromVar(tainted_vars, taintedVarForSource)
+            
+            #Search for entry points to consider the source
+            for c in calledIDs:
+                if(c in entry_points):
+                    taintedVarForSource = c
 
             for v in targetIDs:
                 if(v not in tainted_vars.keys()):
