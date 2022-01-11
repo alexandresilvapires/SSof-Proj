@@ -192,10 +192,14 @@ def removeDupesFromList(l):
     return list(set(l))
 
 
-def trackTaint(tree, entry_points, sanitization, sinks):
-    """ Given a list of entry points, sanitization functions and sinks,
-        returns the vunerability, the source, the sink, and if it the source was sanitized 
-        Only checks explicit flows"""
+def track_taint(tree, entry_points, sanitization, sinks):
+    """ 
+    Given a list of entry points, sanitization functions and sinks,
+    returns the vunerability, the source, the sink, and if it the source was sanitized.
+    Only checks explicit flows.
+    """
+
+    # -------------------------- AUXILIARY FUNCTIONS --------------------------
 
     def getSourceFromVar(tainted_vars, varID):
         """ Given a var ID and the tainted_vars dict, returns the source of the taint recursively"""
@@ -207,117 +211,147 @@ def trackTaint(tree, entry_points, sanitization, sinks):
             if(curvar not in tainted_vars.keys()):
                 return curvar
         return curvar
+
+    def check_sanitization(calls, var_ids, tainted_vars, tainted_count):
+        """
+        For every call made, if the arg was tainted, set sanitized bool to true
+        and lower tainted int, so if tainted == 0 in the end, we can assume only sanitized functions were given
+        """
+        def var_not_sanitized(var):
+            return var in tainted_vars.keys() and tainted_vars[v]["sanitized"] == False
+
+        start_tc = tainted_count
+        is_sanitized = False
+        for c in calls:
+            func_name = getFunctionNameFromCall(c)
+            if func_name in sanitization:
+                for var in var_ids:
+                    if var in getArgsIDFromCall(c) and var_not_sanitized(var):
+                        tainted_count -= 1
         
-    # Dictionary with tainted vars. Each var is associated with a dict, which has:
-    # a bool - "sanitized" - where it is true if the var has been sanitized
-    # a string - "source" - with the source id, that is, the variable that tainted it 
-    #           (if this variable has another source, it gets this value instead, recursively) 
-    #           If the var is not initialized, or the taint comes from a entry point,
-    #           the source is its own ID
+        is_sanitized = start_tc != tainted_count
+
+        return is_sanitized, tainted_count
+
+    def add_tainted_vars_to_dict(tainted_vars, var_ids, instantiated_vars, target_ids):
+        """
+        Add every target ID to the list of tainted vars, as unsanitized
+        and add the uninstantiated vars as tainted too
+        """
+        # Used to know who was the source
+        taintedVarForSource = None
+
+        # Add uninstantiated vars to the list 
+        for v in var_ids:
+            if v not in instantiated_vars and v not in tainted_vars.keys():
+                    tainted_vars[v] = {"sanitized":False, "source": v}
+            if v in tainted_vars.keys():
+                taintedVarForSource = v
+        
+        if taintedVarForSource:
+            taintedVarForSource = getSourceFromVar(tainted_vars, taintedVarForSource)
+
+        for v in target_ids:
+            if v not in tainted_vars.keys():
+                tainted_vars[v] = {"sanitized": False, "source": taintedVarForSource}
+
+    def update_tainted_values(tainted_vars, target_ids, is_sanitized):
+        if is_sanitized:
+            # If anything is sanitized, and no taints were made (tainted == 0),
+            # then the variables were totally sanitized, 
+            # so every target ID's sanitization value is set to true
+            for v in target_ids:
+                tainted_vars[v]["sanitized"] = True
+        else:
+            # Every target ID is now clean, as the value attributed is totally clean
+            for value in target_ids:
+                if value in tainted_vars:
+                    tainted_vars.pop(value)
+
+    def get_tainted_sinks(assignment, tainted_vars, called_ids):
+        """ Gets the sinks that were tainted by this assignment. """
+        ret = []
+        for sink in sinks:
+            if sink in called_ids:
+                call = getCallsWithID(assignment, sink)
+                sink_args = []
+
+                # can call the sink more than once!
+                for c in call:
+                    sink_args += getArgsIDFromCall(c)
+                for t in tainted_vars.keys():
+                    if t in sink_args:
+                        ret.append((tainted_vars[t]["source"], sink, tainted_vars[t]["sanitized"]))
+        return ret
+
+    def update_instantiated_variables(instantiated_vars, target_ids):
+        """ 
+        Updates the list of instantiated variables taking into account this
+        specific loop pass (where a new assignment was analysed).
+        """
+
+        instantiated_vars.extend(v for v in target_ids if v not in instantiated_vars)
+
+    # ----------------------------- MAIN FUNCTION -----------------------------
+
+    assignments = getNodesOfType(tree, "Assign")
+
+    """
+    Dictionary with tainted vars. Each var is associated with a dict, which has:
+        - a bool ("sanitized") where it is true if the var has been sanitized
+        - a string ("source") with the source id, that is, the variable that tainted it 
+              (if this variable has another source, it gets this value instead, recursively) 
+              If the var is not initialized, or the taint comes from a entry point,
+              the source is its own ID
+    """
     tainted_vars = {}
     
-    # Keeps track of instantiated variables, since
-    # by default uninstantiated vars are to be considered vunerable
+    """
+    Keeps track of instantiated variables, since by default uninstantiated vars
+    are to be considered vunerable
+    """
     instantiated_vars = []
-    
-    assigns = getNodesOfType(tree, "Assign")
-    
+
+    tainted_sinks = []
+
     #TODO: CHECK FOR CHAINED FUNCTIONS
     #      Check sink outside assignments
     #           eg: sink(a) 
     #      Return all possible vuns, not just the first found
     #      Add sanitized flows (list of sanitization functions used)
-    
-    for a in assigns:
-        tainted = 0         # turns into a different value if a entry point or 
-                            # tainted var is used in assignment
+    for assignment in assignments:
+        """
+        Counts every time an entry point or tainted variable is used in 
+        an assignment.
+        """
+        tainted_count = 0   
 
-        calls = getNodesOfType(a, "Call")
-        calledIDs = []
-        
-        for c in calls:
-            calledIDs.append(getFunctionNameFromCall(c))
-            
-        varIDs = getVarsUsedAsValue(a)
-        
-        targetIDs = getTargetIDInAssignment(a)
-        
-        #Check if assigned value was entry point or tainted vars and add to list
-        for e in entry_points:
-            # If any was, add each target to the list of tainted vars
-            if(e in calledIDs):
-                tainted += 1
+        calls = getNodesOfType(assignment, "Call")
 
+        """ List of function names that were called in the assignment """
+        called_ids = [getFunctionNameFromCall(c) for c in calls]
+        
+        """ List of variable ids that were used on the right side of the assignment """
+        var_ids = getVarsUsedAsValue(assignment)
 
-        # Check for any vars that were attributed the value of a tainted var (even if as arg)
-        for v in varIDs:
-            if(v in tainted_vars or v not in instantiated_vars):
-                tainted += 1
+        """ List of target variables, used on the left side of the assignment """
+        target_ids = getTargetIDInAssignment(assignment)
+
+        """Sum of variables where an assignment was an entry point"""
+        tainted_count += sum(1 for e in entry_points if e in called_ids)
+
+        """Sum of variables that were assigned the value of a tainted var (even if as an arg)"""
+        tainted_count += sum(1 for v in var_ids if v in tainted_vars or v not in instantiated_vars)
                 
-        # Check for sanitization:
-        # For every call made, if the arg was tainted, set sanitized bool to true
-        # and lower tainted int, so if tainted == 0 in the end, we can assume only sanitized functions were given
-        isSanitized = False
-        for c in calls:
-            if(getFunctionNameFromCall(c) in sanitization):        
-                for v in varIDs:
-                    if(getFunctionNameFromCall(c) in sanitization and v in getArgsIDFromCall(c)
-                        and v in tainted_vars.keys() and tainted_vars[v]["sanitized"] == False):
+        is_sanitized, tainted_count = check_sanitization(calls, var_ids, tainted_vars, tainted_count)
+        
+        if tainted_count > 0:
+            add_tainted_vars_to_dict(tainted_vars, var_ids, instantiated_vars, target_ids)
+        else:
+            update_tainted_values(tainted_vars, target_ids, is_sanitized)
                         
-                        isSanitized = True
-                        tainted -= 1
-        
-        
-        # If anything was tainted, add every target ID to the list of tainted vars, as unsanitized
-        # and add the uninstantiated vars as tainted too
-        if(tainted != 0):
+        update_instantiated_variables(instantiated_vars, target_ids)
 
-            # Used to know who was the source
-            taintedVarForSource = None
+        tainted_sinks.extend(get_tainted_sinks(assignment, tainted_vars, called_ids))
 
-            # Add uninstantiated vars to the list 
-            for v in varIDs:
-                if(v not in instantiated_vars and v not in tainted_vars.keys()):
-                    tainted_vars[v] = {"sanitized":False, "source": v}
-                if(v in tainted_vars.keys()):
-                    taintedVarForSource = v
-                
-            taintedVarForSource = getSourceFromVar(tainted_vars, taintedVarForSource)
-
-            for v in targetIDs:
-                if(v not in tainted_vars.keys()):
-                    tainted_vars[v] = {"sanitized":False, "source":taintedVarForSource}
-            
-        # Update tainted values
-        elif(tainted == 0):
-            if(isSanitized):
-                # If anything is sanitized, and no taints were made (tainted == 0),
-                # then the variables were totally sanitized, 
-                # so every target ID's sanitization value is set to true
-                for v in targetIDs:
-                    tainted_vars[v]["sanitized"] = True
-            else:
-                # Every target ID is now clean, as the value attributed is totally clean
-                for value in targetIDs:
-                    if(value in tainted_vars):
-                        tainted_vars.pop(value)
-                        
-        # Update list of instantiated values with all the values from the target
-        for v in targetIDs:
-            if(v not in instantiated_vars):
-                instantiated_vars.append(v)
-        
-        # If any tainted var is given as an argument for a sink, return source and sink
-        for sink in sinks:
-            if(sink in calledIDs):
-                call = getCallsWithID(a, sink)
-                sink_args = []
-                # can call the sink more than once!
-                for c in call:
-                    sink_args += getArgsIDFromCall(c)
-                
-                for t in tainted_vars.keys():
-                    if(t in sink_args):
-                        return tainted_vars[t]["source"], sink, tainted_vars[t]["sanitized"]
-
-    return None, None, None
+    return tainted_sinks
