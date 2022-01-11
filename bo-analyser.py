@@ -12,7 +12,8 @@ def main():
     parsed = parser.parse_args()
     
     # Parse the program to an AST
-    tree = ast.literal_eval(open(parsed.program).read())
+    tree = json.loads(open(parsed.program).read())
+    print(tree)
     
     # Get a list of dictionaries with each vulnerability
     vulnerability = json.load(open(parsed.patterns))
