@@ -364,6 +364,10 @@ def track_taint(tree, entry_points, sanitization, sinks):
 
     # ----------------------------- MAIN FUNCTION -----------------------------
 
+    # TODO: Should report report ALL possible taints, not just the last ones.
+    # TODO: i.e., in 2-expr-binary-ops.py, we're nor report the taint b() causes
+    # TODO: to a. 
+
     """
     Dictionary with tainted vars. Each var is associated with a dict, which has:
         - a bool ("sanitized") where it is true if the var has been sanitized
