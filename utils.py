@@ -206,9 +206,6 @@ def track_taint(tree, entry_points, sanitization, sinks):
         
         vars_to_check = [varID]
 
-        ("tainted vars:", tainted_vars)
-        ("vars to check:", vars_to_check)
-
         # enquanto a curvar nao for uma das suas proprias sources
         # entao mudamos curvar para as suas sources e vemos se nenhuma delas esta tainted
 
@@ -219,15 +216,11 @@ def track_taint(tree, entry_points, sanitization, sinks):
         while any(x_i not in tainted_vars[x_i]["source"] for x_i in vars_to_check):
             new_vars = []
             for x in vars_to_check:
-                ("checking this:", x)
                 for source in tainted_vars[x]["source"]:
-                    ("yo, this source:", source)
                     if source not in tainted_vars:
-                        ("WE BE RETURNIN")
                         return source
 
                 new_vars.extend(tainted_vars[x]["source"])
-                ("NEW:", new_vars)
 
             vars_to_check = new_vars
 
@@ -264,7 +257,6 @@ def track_taint(tree, entry_points, sanitization, sinks):
         variables_to_search_for_source = []
         sources = []
 
-        ("TAINTS, MAN")
 
         # Add uninstantiated vars to the list 
         for v in var_ids:
@@ -273,7 +265,6 @@ def track_taint(tree, entry_points, sanitization, sinks):
                 sources.append(v)
             elif v in tainted_vars:
                 variables_to_search_for_source.append(v)
-        ("THESE NEEDS SEARCHIN', BRO:", variables_to_search_for_source)
         for var in variables_to_search_for_source:
             sources.extend(getSourceFromVar(tainted_vars, var))
         
@@ -330,8 +321,6 @@ def track_taint(tree, entry_points, sanitization, sinks):
         #!           eg: sink(a) 
         #!      Return all possible vuns, not just the first found
         #!      Add sanitized flows (list of sanitization functions used)
-
-        ("CHECKING ASSIGNMENTS, YO")
 
         for assignment in assignments:
             """
@@ -394,7 +383,6 @@ def track_taint(tree, entry_points, sanitization, sinks):
     tainted_sinks = []
 
     for line in getLines(tree):
-        ("LINE YO")
         assignments = getNodesOfType(line, "Assign")
         check_for_tainted_assignments(assignments, tainted_vars=tainted_vars, instantiated_vars=instantiated_vars, tainted_sinks=tainted_sinks)
 
