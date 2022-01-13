@@ -202,15 +202,36 @@ def track_taint(tree, entry_points, sanitization, sinks):
     # -------------------------- AUXILIARY FUNCTIONS --------------------------
 
     def getSourceFromVar(tainted_vars, varID):
-        """ Given a var ID and the tainted_vars dict, returns the source of the taint recursively"""
-        curvar = varID
-        while tainted_vars[curvar]["source"] != curvar:
-            curvar = tainted_vars[curvar]["source"]
+        """ Given a var ID and the tainted_vars dict, returns the source of the taint recursively """
+        
+        vars_to_check = [varID]
 
-            # Case for uninitialized vars
-            if curvar not in tainted_vars.keys():
-                return curvar
-        return curvar
+        ("tainted vars:", tainted_vars)
+        ("vars to check:", vars_to_check)
+
+        # enquanto a curvar nao for uma das suas proprias sources
+        # entao mudamos curvar para as suas sources e vemos se nenhuma delas esta tainted
+
+        # enquanto nenhuma das variaveis x_i da lista for uma das suas proprias sources
+        # entao adicionamos as sources de x_i à lista de variáveis e, se alguma
+        # das sources de x_i nao for tainted, retornamos
+
+        while any(x_i not in tainted_vars[x_i]["source"] for x_i in vars_to_check):
+            new_vars = []
+            for x in vars_to_check:
+                ("checking this:", x)
+                for source in tainted_vars[x]["source"]:
+                    ("yo, this source:", source)
+                    if source not in tainted_vars:
+                        ("WE BE RETURNIN")
+                        return source
+
+                new_vars.extend(tainted_vars[x]["source"])
+                ("NEW:", new_vars)
+
+            vars_to_check = new_vars
+
+        return vars_to_check
 
     def check_sanitization(calls, var_ids, tainted_vars, tainted_count):
         """
@@ -218,7 +239,7 @@ def track_taint(tree, entry_points, sanitization, sinks):
         and lower tainted int, so if tainted == 0 in the end, we can assume only sanitized functions were given
         """
         def var_not_sanitized(var):
-            return var in tainted_vars.keys() and tainted_vars[v]["sanitized"] == False
+            return var in tainted_vars.keys() and tainted_vars[var]["sanitized"] == False
 
         start_tc = tainted_count
         is_sanitized = False
@@ -239,30 +260,30 @@ def track_taint(tree, entry_points, sanitization, sinks):
         and add the uninstantiated vars as tainted too
         """
 
-        #! THIS FUNCTION IS VERY WRONG. taintedVarForSource changes independently
-        #! from the other variables being considered.
-
         # Used to know who was the source
-        taintedVarForSource = None
+        variables_to_search_for_source = []
+        sources = []
+
+        ("TAINTS, MAN")
 
         # Add uninstantiated vars to the list 
         for v in var_ids:
-            if v not in instantiated_vars and v not in tainted_vars.keys():
-                    tainted_vars[v] = {"sanitized": False, "source": v}
-            if v in tainted_vars.keys():
-                taintedVarForSource = v
+            if v not in instantiated_vars and v not in tainted_vars:
+                tainted_vars[v] = {"sanitized": False, "source": [v]}
+                sources.append(v)
+            elif v in tainted_vars:
+                variables_to_search_for_source.append(v)
+        ("THESE NEEDS SEARCHIN', BRO:", variables_to_search_for_source)
+        for var in variables_to_search_for_source:
+            sources.extend(getSourceFromVar(tainted_vars, var))
         
-        if taintedVarForSource:
-            taintedVarForSource = getSourceFromVar(tainted_vars, taintedVarForSource)
-
-        #Search for entry points to consider the source
-        for call in called_ids:
-            if call in entry_points:
-                taintedVarForSource = call
-
         for v in target_ids:
-            if v not in tainted_vars.keys():
-                tainted_vars[v] = {"sanitized": False, "source": taintedVarForSource}
+            if v not in tainted_vars:
+                tainted_vars[v] = {"sanitized": False, "source": sources}
+
+                for call in called_ids:
+                    if call in entry_points:
+                        tainted_vars[v]["source"].append(call)
 
     def update_tainted_values(tainted_vars, target_ids, is_sanitized):
         if is_sanitized:
@@ -289,7 +310,7 @@ def track_taint(tree, entry_points, sanitization, sinks):
                 for c in call:
                     sink_args += getArgsIDFromCall(c)
                 
-                for t in tainted_vars.keys():
+                for t in tainted_vars:
                     if t in sink_args:
                         ret.append((tainted_vars[t]["source"], sink, tainted_vars[t]["sanitized"]))
         return ret
@@ -309,6 +330,8 @@ def track_taint(tree, entry_points, sanitization, sinks):
         #!           eg: sink(a) 
         #!      Return all possible vuns, not just the first found
         #!      Add sanitized flows (list of sanitization functions used)
+
+        ("CHECKING ASSIGNMENTS, YO")
 
         for assignment in assignments:
             """
@@ -371,6 +394,7 @@ def track_taint(tree, entry_points, sanitization, sinks):
     tainted_sinks = []
 
     for line in getLines(tree):
+        ("LINE YO")
         assignments = getNodesOfType(line, "Assign")
         check_for_tainted_assignments(assignments, tainted_vars=tainted_vars, instantiated_vars=instantiated_vars, tainted_sinks=tainted_sinks)
 
