@@ -17,27 +17,29 @@ def main():
     vulnerability = json.load(open(parsed.patterns))
     
     caughtVuns = []
+    vuln_counts = {}
     
     # For each vulnerability, mark each field of the AST based on if they are a sink, sanitizer or source
     # Then go through the AST to check what flows happen
     for v in vulnerability:
-        print("Testing program for vulnerability",v['vulnerability'])
+        vuln_name = v["vulnerability"]
+        vuln_counts[vuln_name] = 0
+        print("Testing program for vulnerability", vuln_name)
         
         print("Checking information flows")
-        
+
         caught = utils.track_taint(tree, v["sources"], v["sanitizers"], v["sinks"])
         if len(caught) != 0:
             for vuln in caught:
                 sources, sink, sanit = vuln
 
-                count = 0
                 for source in sources:    
-                    count += 1            
+                    vuln_counts[vuln_name] += 1       
                     if sanit:
-                        caughtVuns.append({"vulnerability":f'{v["vulnerability"]}_{count}', "source":source, "sink":sink, 
+                        caughtVuns.append({"vulnerability":f'{vuln_name}_{vuln_counts[vuln_name]}', "source":source, "sink":sink, 
                                         "unsanitized flows": "no", "sanitized flows":[]})
                     else:
-                        caughtVuns.append({"vulnerability":f'{v["vulnerability"]}_{count}', "source":source, "sink":sink, 
+                        caughtVuns.append({"vulnerability":f'{vuln_name}_{vuln_counts[vuln_name]}', "source":source, "sink":sink, 
                                         "unsanitized flows": "yes", "sanitized flows":[]})
     print("----- Final Results -----")
     print(caughtVuns)

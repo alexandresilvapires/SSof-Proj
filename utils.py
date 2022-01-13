@@ -282,7 +282,10 @@ def track_taint(tree, entry_points, sanitization, sinks):
             # then the variables were totally sanitized, 
             # so every target ID's sanitization value is set to true
             for v in target_ids:
-                tainted_vars[v]["sanitized"] = True
+                if v in tainted_vars:
+                    tainted_vars[v]["sanitized"] = True
+                else:
+                    tainted_vars[v] = {"sanitized": True, "source": []}
         else:
             # Every target ID is now clean, as the value attributed is totally clean
             for value in target_ids:
@@ -317,10 +320,7 @@ def track_taint(tree, entry_points, sanitization, sinks):
     def check_for_tainted_assignments(assignments, tainted_vars, instantiated_vars, tainted_sinks):
 
         #TODO: CHECK FOR CHAINED FUNCTIONS
-        #!      Check sink outside assignments
-        #!           eg: sink(a) 
-        #!      Return all possible vuns, not just the first found
-        #!      Add sanitized flows (list of sanitization functions used)
+        #TODO: Add sanitized flows (list of sanitization functions used)
 
         for assignment in assignments:
             """
