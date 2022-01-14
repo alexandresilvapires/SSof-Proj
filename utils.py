@@ -2,6 +2,9 @@
 
 # JSON Program utils
 
+from cmath import sin
+
+
 def getLines(tree):
     return tree["body"]
 
@@ -232,7 +235,7 @@ def track_taint(tree, entry_points, sanitization, sinks):
         and lower tainted int, so if tainted == 0 in the end, we can assume only sanitized functions were given
         """
         def var_not_sanitized(var):
-            return var in tainted_vars.keys() and tainted_vars[var]["sanitized"] == False
+            return var in tainted_vars and tainted_vars[var]["sanitized"] == False
 
         start_tc = tainted_count
         is_sanitized = False
@@ -292,7 +295,7 @@ def track_taint(tree, entry_points, sanitization, sinks):
                 if value in tainted_vars:
                     tainted_vars.pop(value)
 
-    def get_tainted_sinks(line, tainted_vars, called_ids):
+    def get_tainted_sinks(line, tainted_vars, called_ids, target_ids=None):
         """ Gets the sinks that were tainted by this line. """
         ret = []
         for sink in sinks:
@@ -307,6 +310,8 @@ def track_taint(tree, entry_points, sanitization, sinks):
                 for t in tainted_vars:
                     if t in sink_args:
                         ret.append((tainted_vars[t]["source"], sink, tainted_vars[t]["sanitized"]))
+            elif target_ids and (sink in tainted_vars and sink in target_ids):
+                ret.append((tainted_vars[sink]["source"], sink, tainted_vars[sink]["sanitized"]))
         return ret
 
     def update_instantiated_variables(instantiated_vars, target_ids):
@@ -355,7 +360,7 @@ def track_taint(tree, entry_points, sanitization, sinks):
                             
             update_instantiated_variables(instantiated_vars, target_ids)
 
-            tainted_sinks.extend(get_tainted_sinks(line, tainted_vars, called_ids))
+            tainted_sinks.extend(get_tainted_sinks(line, tainted_vars, called_ids, target_ids))
     
     def check_for_lonely_call_tainting(line, tainted_vars, tainted_sinks):
         lonely_calls = getNodesOfType(line, "Call")
