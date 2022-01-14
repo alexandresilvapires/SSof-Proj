@@ -28,7 +28,8 @@ def main():
         
         print("Checking information flows")
 
-        caught = utils.track_taint(tree, v["sources"], v["sanitizers"], v["sinks"])
+        caught = utils.track_taint(tree, v["sources"], v["sanitizers"], v["sinks"], False)
+
         if len(caught) != 0:
             for vuln in caught:
                 sources, sink, sanit = vuln

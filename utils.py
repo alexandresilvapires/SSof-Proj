@@ -76,8 +76,9 @@ def getNodesOfType(tree, type):
             nodes += [tree]
         for stmt in tree["body"]:
             nodes += getNodesOfType(stmt, type)
-        for stmt in tree["orelse"]:
-            nodes += getNodesOfType(stmt, type)
+        if("orelse" in tree.keys()):
+            for stmt in tree["orelse"]:
+                nodes += getNodesOfType(stmt, type)
         return nodes +  getNodesOfType(tree["test"], type) 
 
     elif(tree["ast_type"] == "While"):
@@ -188,11 +189,31 @@ def getVarsUsedAsValue(tree):
             
     return names
 
+def getVarsUsedAsValueComparisons(tree):
+    """ Given a tree, returns the list of variable ids used
+        in the assignment, INCLUDING VARS USED AS FUNCTION ARGS"""
+        
+    # Terrible way to do this, get every named node, get every name that is from a function
+    # and return the remaining names
+    names = []
+    
+    funcCalls = getNodesOfType(tree, "Call")
+    funcNames = []
+    for c in funcCalls:
+        funcNames.append(getFunctionNameFromCall(c))
+    
+    nameNodes = getNodesOfType(tree,"Name")
+    for n in nameNodes:
+        if(n["id"] not in funcNames and n["id"] not in names):
+            names.append(n["id"])
+            
+    return names
+
 def removeDupesFromList(l):
     return list(set(l))
 
 
-def track_taint(tree, entry_points, sanitization, sinks):
+def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
     """ 
     Given a list of entry points, sanitization functions and sinks,
     returns the vunerability, the source, the sink, and if it the source was sanitized.
@@ -316,6 +337,54 @@ def track_taint(tree, entry_points, sanitization, sinks):
         """
 
         instantiated_vars.extend(v for v in target_ids if v not in instantiated_vars)
+        
+    def check_for_implicit_flows(line, tainted_vars=[], instantiated_vars=[], tainted_sinks=[]):
+        
+        # Get every var used in the condition
+        varsUsedInCond = getVarsUsedAsValueComparisons(line["test"])
+        
+        
+        possiblyImplicit = False
+        possibleSources = []
+        
+        # If a tainted var is used in the comparison, we can consider every following 
+        # step that leads to a sink an implicit flow
+        for var in varsUsedInCond:
+            if(var in tainted_vars):
+                possiblyImplicit = True
+                possibleSources.append(getSourceFromVar(tainted_vars, var))
+                break
+
+        # If we are considering implicit flows, every variable that interacts with these implicitly tainted vars 
+        #  must also be considered implicitly tainted
+        # So we update the tainted_vars to consider every new implicitly tainted var
+        # We also must consider sanitization of these variables
+        
+        calls = getNodesOfType(line["test"], "Call")
+        
+        if(possiblyImplicit):
+            # check for tainted sources being called
+            for call in calls:
+                if(getFunctionNameFromCall(call) in sinks):
+                    possibleSources += getFunctionNameFromCall(call)
+            
+            for var in varsUsedInCond:
+                # Check for sanitization
+                for call in calls:
+                    if(getFunctionNameFromCall(call) in sanitization and var in getArgsIDFromCall(call) 
+                        and var not in tainted_vars.keys()):
+                        
+                        if(var not in instantiated_vars):
+                            tainted_vars[var] = {"source":var, "sanitized": True}
+                        else:
+                            tainted_vars[var] = {"source":possibleSources, "sanitized": True}
+                    
+                # If no sanitization is used
+                if(var not in tainted_vars.keys()):
+                    if(var not in instantiated_vars):
+                        tainted_vars[var] = {"source":var, "sanitized": True}
+                    else:
+                        tainted_vars[var] = {"source":possibleSources, "sanitized": False}
 
     def check_for_tainted_assignments(assignments, tainted_vars, instantiated_vars, tainted_sinks):
 
@@ -387,10 +456,20 @@ def track_taint(tree, entry_points, sanitization, sinks):
     tainted_sinks = []
 
     for line in getLines(tree):
+        
+        # check implicit flows if conditionals exist
+        if(checkImplicit):
+            if(line["ast_type"] == "If" or line["ast_type"] == "While"):
+                check_for_implicit_flows(line, tainted_vars=tainted_vars, instantiated_vars=instantiated_vars, tainted_sinks=tainted_sinks)
+            
+        # Also check for explicit flows
         assignments = getNodesOfType(line, "Assign")
-        check_for_tainted_assignments(assignments, tainted_vars=tainted_vars, instantiated_vars=instantiated_vars, tainted_sinks=tainted_sinks)
 
-        if assignments == []:
-            check_for_lonely_call_tainting(line, tainted_vars=tainted_vars, tainted_sinks=tainted_sinks)
-
+        if assignments != []:
+            check_for_tainted_assignments(assignments, tainted_vars=tainted_vars, instantiated_vars=instantiated_vars, tainted_sinks=tainted_sinks)
+            
+        else:
+            calls = getNodesOfType(line, "Call")
+            if(calls != []):
+                check_for_lonely_call_tainting(line, tainted_vars=tainted_vars, tainted_sinks=tainted_sinks)
     return tainted_sinks
