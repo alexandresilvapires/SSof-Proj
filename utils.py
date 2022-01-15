@@ -399,10 +399,8 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         
         # Get every var used in the condition
         varsUsedInCond = getVarsUsedAsValueComparisons(line["test"])
-
         varsUsed = getVarsUsedAsValueComparisons(line)
-        
-        
+
         possiblyImplicit = False
         possibleSources = []
         
@@ -411,7 +409,10 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         
         #for var in varsUsedInCond:
         for var in varsUsedInCond:
-            if(var in tainted_vars):
+            if(var not in instantiated_vars):
+                possiblyImplicit = True
+                possibleSources.append(var)
+            elif(var in tainted_vars):
                 possiblyImplicit = True
                 possibleSources.append(getSourceFromVar(tainted_vars, var))
             # Add every var in cond as a possible source if an implicit flow is possible
@@ -523,7 +524,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         if(checkImplicit):
             if(line["ast_type"] == "If" or line["ast_type"] == "While"):
                 check_for_implicit_flows(line, tainted_vars=tainted_vars, instantiated_vars=instantiated_vars, tainted_sinks=tainted_sinks)
-            
+        
         # Also check for explicit flows
         assignments = getNodesOfType(line, "Assign")
 
