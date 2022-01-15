@@ -238,7 +238,6 @@ def track_taint(tree, entry_points, sanitization, sinks):
             return var in tainted_vars and tainted_vars[var]["sanitized"] == False
 
         start_tc = tainted_count
-        is_sanitized = False
         for c in calls:
             func_name = getFunctionNameFromCall(c)
             if func_name in sanitization:
@@ -297,21 +296,29 @@ def track_taint(tree, entry_points, sanitization, sinks):
 
     def get_tainted_sinks(line, tainted_vars, called_ids, target_ids=None):
         """ Gets the sinks that were tainted by this line. """
+        def add_tainted_sink(sources, sink, sanitized):
+            srcs = sources if isinstance(sources, list) else [sources]
+            ret.append((srcs, sink, sanitized))
         ret = []
         for sink in sinks:
             if sink in called_ids:
                 call = getCallsWithID(line, sink)
 
                 sink_args = []
-                # can call the sink more than once!
                 for c in call:
                     sink_args += getArgsIDFromCall(c)
-                
+
+                for src in entry_points:
+                    if src in sink_args:
+                        #! SANITIZED FLOWS?
+                        add_tainted_sink(src, sink, False)
+
                 for t in tainted_vars:
                     if t in sink_args:
-                        ret.append((tainted_vars[t]["source"], sink, tainted_vars[t]["sanitized"]))
+                        add_tainted_sink(tainted_vars[t]["source"], sink, tainted_vars[t]["sanitized"])
+
             elif target_ids and (sink in tainted_vars and sink in target_ids):
-                ret.append((tainted_vars[sink]["source"], sink, tainted_vars[sink]["sanitized"]))
+                add_tainted_sink(tainted_vars[sink]["source"], sink, tainted_vars[sink]["sanitized"])
         return ret
 
     def update_instantiated_variables(instantiated_vars, target_ids):

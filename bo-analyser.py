@@ -40,6 +40,7 @@ def main():
                 else:
                     caughtVuns.append({"vulnerability":f'{vuln_name}_{vuln_counts[vuln_name]}', "source":source, "sink":sink, 
                                     "unsanitized flows": "yes", "sanitized flows":[]})
+
     print("----- Final Results -----")
     print(caughtVuns)
 
