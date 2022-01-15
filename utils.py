@@ -399,6 +399,8 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         
         # Get every var used in the condition
         varsUsedInCond = getVarsUsedAsValueComparisons(line["test"])
+
+        varsUsed = getVarsUsedAsValueComparisons(line)
         
         
         possiblyImplicit = False
@@ -406,11 +408,15 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         
         # If a tainted var is used in the comparison, we can consider every following 
         # step that leads to a sink an implicit flow
+        
+        #for var in varsUsedInCond:
         for var in varsUsedInCond:
             if(var in tainted_vars):
                 possiblyImplicit = True
                 possibleSources.append(getSourceFromVar(tainted_vars, var))
-                break
+            # Add every var in cond as a possible source if an implicit flow is possible
+            elif((var not in tainted_vars) and possiblyImplicit):
+                possibleSources.append(var)
 
         # If we are considering implicit flows, every variable that interacts with these implicitly tainted vars 
         #  must also be considered implicitly tainted
@@ -420,28 +426,31 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         calls = getNodesOfType(line["test"], "Call")
         
         if(possiblyImplicit):
+
             # check for tainted sources being called
             for call in calls:
                 if(getFunctionNameFromCall(call) in sinks):
                     possibleSources += getFunctionNameFromCall(call)
             
-            for var in varsUsedInCond:
+            #for var in varsUsedInCond:
+            for var in varsUsed:
                 # Check for sanitization
                 for call in calls:
-                    if(getFunctionNameFromCall(call) in sanitization and var in getArgsIDFromCall(call) 
-                        and var not in tainted_vars.keys()):
-                        
+                    fname = getFunctionNameFromCall(call)
+
+                    if(fname in sanitization and var in getArgsIDFromCall(call)
+                        and (var not in tainted_vars.keys())):
                         if(var not in instantiated_vars):
-                            tainted_vars[var] = {"source":var, "sanitized": True}
+                            tainted_vars[var] = {"source":possibleSources, "sanitized": True, "sanitized_flows":[fname]}
                         else:
-                            tainted_vars[var] = {"source":possibleSources, "sanitized": True}
+                            tainted_vars[var] = {"source":possibleSources, "sanitized": True, "sanitized_flows":[fname]}
                     
                 # If no sanitization is used
                 if(var not in tainted_vars.keys()):
                     if(var not in instantiated_vars):
-                        tainted_vars[var] = {"source":var, "sanitized": True}
+                        tainted_vars[var] = {"source":possibleSources, "sanitized": False, "sanitized_flows":[]}
                     else:
-                        tainted_vars[var] = {"source":possibleSources, "sanitized": False}
+                        tainted_vars[var] = {"source":possibleSources, "sanitized": False,"sanitized_flows":[]}
 
     def check_for_tainted_assignments(assignments, tainted_vars, instantiated_vars, tainted_sinks):
 
