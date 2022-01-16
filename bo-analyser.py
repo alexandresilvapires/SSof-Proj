@@ -25,8 +25,8 @@ def main():
         vuln_name = v["vulnerability"]
         vuln_counts[vuln_name] = 0
 
-        print("Testing program for vulnerability", vuln_name)
-        print("Checking information flows")
+        print("-- Testing program for vulnerability", vuln_name, "--")
+        print("-- Checking information flows --\n")
 
         caught = utils.track_taint(tree, v["sources"], v["sanitizers"], v["sinks"], True)
         for vuln in caught:
