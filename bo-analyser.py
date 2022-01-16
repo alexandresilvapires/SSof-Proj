@@ -28,7 +28,8 @@ def main():
         print("Testing program for vulnerability", vuln_name)
         print("Checking information flows")
 
-        caught = utils.track_taint(tree, v["sources"], v["sanitizers"], v["sinks"], True)
+        caught = utils.track_taint(tree, v["sources"], v["sanitizers"], v["sinks"], v["implicit"] == "yes")
+            
         for vuln in caught:
             sources, sink, is_sanitized, s_flows = vuln
 

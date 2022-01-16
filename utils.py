@@ -3,6 +3,7 @@
 # JSON Program utils
 
 from cmath import sin
+from unittest import skip
 
 from numpy import var
 
@@ -420,7 +421,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 possibleSources.append(var)
 
         # If we are considering implicit flows, every variable that interacts with these implicitly tainted vars 
-        #  must also be considered implicitly tainted
+        # must also be considered implicitly tainted
         # So we update the tainted_vars to consider every new implicitly tainted var
         # We also must consider sanitization of these variables
         
@@ -435,6 +436,10 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             
             #for var in varsUsedInCond:
             for var in varsUsed:
+                # We dont want flows from a var to the same var #TODO: bad fix for a bad approach
+                if([var] == possibleSources):
+                    continue
+
                 # Check for sanitization
                 for call in calls:
                     fname = getFunctionNameFromCall(call)
