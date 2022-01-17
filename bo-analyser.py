@@ -24,24 +24,24 @@ def main():
     for v in vulnerability:
         vuln_name = v["vulnerability"]
         vuln_counts[vuln_name] = 0
+
         print("Testing program for vulnerability", vuln_name)
-        
         print("Checking information flows")
 
-        caught = utils.track_taint(tree, v["sources"], v["sanitizers"], v["sinks"], False)
+        caught = utils.track_taint(tree, v["sources"], v["sanitizers"], v["sinks"], v["implicit"] == "yes")
+            
+        for vuln in caught:
+            sources, sink, is_sanitized, s_flows = vuln
 
-        if len(caught) != 0:
-            for vuln in caught:
-                sources, sink, sanit = vuln
+            for source in sources:    
+                vuln_counts[vuln_name] += 1       
+                if is_sanitized:
+                    caughtVuns.append({"vulnerability":f'{vuln_name}_{vuln_counts[vuln_name]}', "source":source, "sink":sink, 
+                                    "unsanitized flows": "no", "sanitized flows": s_flows})
+                else:
+                    caughtVuns.append({"vulnerability":f'{vuln_name}_{vuln_counts[vuln_name]}', "source":source, "sink":sink, 
+                                    "unsanitized flows": "yes", "sanitized flows": s_flows})
 
-                for source in sources:    
-                    vuln_counts[vuln_name] += 1       
-                    if sanit:
-                        caughtVuns.append({"vulnerability":f'{vuln_name}_{vuln_counts[vuln_name]}', "source":source, "sink":sink, 
-                                        "unsanitized flows": "no", "sanitized flows":[]})
-                    else:
-                        caughtVuns.append({"vulnerability":f'{vuln_name}_{vuln_counts[vuln_name]}', "source":source, "sink":sink, 
-                                        "unsanitized flows": "yes", "sanitized flows":[]})
     print("----- Final Results -----")
     print(caughtVuns)
 
