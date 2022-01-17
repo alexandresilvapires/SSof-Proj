@@ -3,6 +3,7 @@
 # JSON Program utils
 
 from cmath import sin
+from pydoc import source_synopsis
 from unittest import skip
 
 from numpy import var
@@ -218,6 +219,69 @@ def getVarsUsedAsValueComparisons(tree):
 def removeDupesFromList(l):
     return list(set(l))
 
+def function_call_args_to_dict(call):
+    """Turns a funcion call to a easy-to-read dict
+    ex: a(b+y,c(d,d),l(t())) = {a:{b_1:None, y_1:None, c_1:{d_1:None,d_2:None},l_1:{t_1:None}}}
+    
+    Note: Disregards constants."""
+    
+    f_dict = {}
+    
+    if(not isinstance(call, dict) or "args" not in call.keys()):
+        return f_dict
+        
+    for arg in call['args']:
+        if(arg["ast_type"] == "Name"):
+            varName = arg["id"]
+            numOcc = 1
+            for key in f_dict.keys():
+                if(key == varName):
+                    numOcc += 1
+            f_dict.update({varName+"_"+str(numOcc):{}})
+        elif(arg["ast_type"] == "Call"):
+            
+            varName = getFunctionNameFromCall(arg)
+            numOcc = 1
+            for key in f_dict.keys():
+                if(key == varName):
+                    numOcc += 1
+            f_dict.update({varName+"_"+str(numOcc):function_call_args_to_dict(arg)})
+        elif(arg["ast_type"] == 'Expr'):
+            f_dict.update(function_call_args_to_dict(arg["value"]))
+        elif(arg["ast_type"] == "BinOp"):
+            f_dict.update(function_call_args_to_dict(arg["right"]))
+            f_dict.update(function_call_args_to_dict(arg["left"]))
+        elif(arg["ast_type"] == "Compare"):
+            for comps in arg["comparators"]:
+                f_dict.update(function_call_args_to_dict(comps))
+            f_dict.update(function_call_args_to_dict(arg["left"]))
+        
+    return f_dict
+    
+def function_arg_dict_to_status(f_dict, sources, tainted_vars, sanitizers):
+    """ Given a function argument dict returns if the function is tainted, and if it is sanitized"""
+    isTainted = False
+    isUnsanitized = False
+
+    for arg in f_dict.keys():
+        # Clean _X from name:
+        splits = arg.split("_")
+        newArg = ""
+        for i in range(0,len(splits)-1):
+            newArg += splits[i]
+        
+        if(newArg in sources or newArg in tainted_vars.keys()):
+            isTainted = True
+            
+        elif(newArg in sanitizers):
+            isUnsanitized = True
+            
+        argTaint, argSanit = function_arg_dict_to_status(f_dict[arg], sources, tainted_vars, sanitizers)
+        isTainted = isTainted or argTaint
+        isUnsanitized = isUnsanitized or (argSanit and not isTainted)
+            
+    return isTainted, isUnsanitized
+
 
 def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
     """ 
@@ -391,15 +455,15 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         for sink in sinks:
             if sink in called_ids:
                 call = getCallsWithID(line, sink)
-
                 sink_args = []
                 for c in call:
                     sink_args += getArgsIDFromCall(c)
+                    #print("StatusTime:", function_arg_dict_to_status(function_call_args_to_dict(c), entry_points, tainted_vars, sanitization))
 
                 for src in entry_points:
                     if src in sink_args:
                         #! SANITIZED FLOWS?
-                        print(src, "this will have not sanitized flows")
+                        #print(src, "this will have not sanitized flows")
                         add_tainted_sink(src, sink, False, [])
 
                 for t in tainted_vars:
