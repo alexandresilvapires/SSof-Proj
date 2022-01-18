@@ -261,8 +261,9 @@ def function_call_args_to_dict(call):
 def function_arg_dict_to_status(f_dict, sources, tainted_vars, sanitizers):
     """ Given a function argument dict returns if the function is tainted, and if it is sanitized"""
     isTainted = False
-    isUnsanitized = False
-
+    isSanitized = False
+    
+    # Cycle each arg and check the combined values of each
     for arg in f_dict.keys():
         # Clean _X from name:
         splits = arg.split("_")
@@ -271,16 +272,18 @@ def function_arg_dict_to_status(f_dict, sources, tainted_vars, sanitizers):
             newArg += splits[i]
         
         if(newArg in sources or newArg in tainted_vars.keys()):
-            isTainted = True
+            isTainted = True or isTainted
             
-        elif(newArg in sanitizers):
-            isUnsanitized = True
+        if(newArg in sanitizers or (newArg in tainted_vars.keys() and tainted_vars[newArg]["sanitized"] == True)):
+            isSanitized = True
+        else:
+            isSanitized = not isTainted
             
         argTaint, argSanit = function_arg_dict_to_status(f_dict[arg], sources, tainted_vars, sanitizers)
         isTainted = isTainted or argTaint
-        isUnsanitized = isUnsanitized or (argSanit and not isTainted)
+        isSanitized = isSanitized or (argSanit and not isTainted)
             
-    return isTainted, isUnsanitized
+    return isTainted, isSanitized and isTainted
 
 
 def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
@@ -458,6 +461,8 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 sink_args = []
                 for c in call:
                     sink_args += getArgsIDFromCall(c)
+                    #print(tainted_vars)
+                    #print(function_call_args_to_dict(c))
                     #print("StatusTime:", function_arg_dict_to_status(function_call_args_to_dict(c), entry_points, tainted_vars, sanitization))
 
                 for src in entry_points:
