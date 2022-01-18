@@ -105,7 +105,6 @@ def getNodesOfType(tree, type):
     else:
         return nodes
 
-
 def getCallsWithID(tree, id):
     calls = []
     funcs = getNodesOfType(tree, "Call")
@@ -461,14 +460,15 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 sink_args = []
                 for c in call:
                     sink_args += getArgsIDFromCall(c)
-                    #print(tainted_vars)
-                    #print(function_call_args_to_dict(c))
-                    #print("StatusTime:", function_arg_dict_to_status(function_call_args_to_dict(c), entry_points, tainted_vars, sanitization))
+                    # print(tainted_vars)
+                    # print(function_call_args_to_dict(c))
+                    # print("StatusTime:", function_arg_dict_to_status(function_call_args_to_dict(c), entry_points, tainted_vars, sanitization))
 
                 for src in entry_points:
                     if src in sink_args:
-                        #! SANITIZED FLOWS?
+                        #! SANITIZED FLOWS? TODO
                         #print(src, "this will have not sanitized flows")
+                        print(src)
                         add_tainted_sink(src, sink, False, [])
 
                 for t in tainted_vars:
