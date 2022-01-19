@@ -51,16 +51,16 @@ class taintedVars:
         # entao adicionamos as sources de x_i à lista de variáveis e, se alguma
         # das sources de x_i nao for tainted, retornamos
 
-        while any(x_i not in fun(self.vars, x_i) for x_i in vars_to_check):
+        while any(x_i not in fun(x_i) for x_i in vars_to_check):
             new_vars = []
             for x in vars_to_check:
                 
-                for source in fun(self.vars, x):
+                for source in fun(x):
                     
                     if source not in self.vars:
                         return source
 
-                new_vars.extend(fun(self.vars, x))
+                new_vars.extend(fun(x))
 
             vars_to_check = new_vars
 
@@ -150,6 +150,14 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
 
     # -------------------------- AUXILIARY FUNCTIONS --------------------------
 
+    def update_instantiated_variables(instantiated_vars, target_ids):
+        """ 
+        Updates the list of instantiated variables taking into account this
+        specific loop pass (where a new assignment was analysed).
+        """
+
+        instantiated_vars.extend(v for v in target_ids if v not in instantiated_vars)
+
     def check_sanitization(calls, var_ids, tainted_vars, tainted_count):
         """
         For every call made, if the arg was tainted, set sanitized bool to true
@@ -191,7 +199,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             if v not in instantiated_vars and v not in tainted_vars.vars:
                 tainted_vars.add_new(v, False, v, [])
                 sources.append(v)
-            elif v in tainted_vars:
+            elif v in tainted_vars.vars:
                 sources.extend(tainted_vars.get_source_from_var(v))
                 sanitized_flows.extend(tainted_vars.get_all_sanitized_flows_from_var(v))
 
@@ -232,7 +240,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         else:
             # Every target ID is now clean, as the value attributed is totally clean
             for value in target_ids:
-                if value in tainted_vars:
+                if value in tainted_vars.vars:
                     tainted_vars.pop(value)
 
     def get_tainted_sinks(line, tainted_vars, called_ids, target_ids=None):
@@ -275,14 +283,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 add_tainted_sink_with_id(sink, sink)
         
         return ret
-
-    def update_instantiated_variables(instantiated_vars, target_ids):
-        """ 
-        Updates the list of instantiated variables taking into account this
-        specific loop pass (where a new assignment was analysed).
-        """
-
-        instantiated_vars.extend(v for v in target_ids if v not in instantiated_vars)
         
     def check_for_implicit_flows(line, tainted_vars=[], instantiated_vars=[], tainted_sinks=[]):
         
@@ -301,11 +301,11 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             if(var not in instantiated_vars):
                 possiblyImplicit = True
                 possibleSources.append(var)
-            elif(var in tainted_vars):
+            elif(var in tainted_vars.vars):
                 possiblyImplicit = True
-                possibleSources.append(get_source_from_var(tainted_vars, var))
+                possibleSources.append(tainted_vars.get_source_from_var(var))
             # Add every var in cond as a possible source if an implicit flow is possible
-            elif((var not in tainted_vars) and possiblyImplicit):
+            elif((var not in tainted_vars.vars) and possiblyImplicit):
                 possibleSources.append(var)
 
         # If we are considering implicit flows, every variable that interacts with these implicitly tainted vars 
@@ -333,18 +333,12 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                     fname = getCallID(call)
 
                     if(fname in sanitization and var in getCallArgsID(call)
-                        and (var not in tainted_vars.keys())):
-                        if(var not in instantiated_vars):
-                            tainted_vars[var] = {"source":possibleSources, "sanitized": True, "sanitized_flows":[fname]}
-                        else:
-                            tainted_vars[var] = {"source":possibleSources, "sanitized": True, "sanitized_flows":[fname]}
+                        and (var not in tainted_vars.vars.keys())):
+                        tainted_vars.add_new(var, True, possibleSources, [fname])
                     
                 # If no sanitization is used
-                if(var not in tainted_vars.keys()):
-                    if(var not in instantiated_vars):
-                        tainted_vars[var] = {"source":possibleSources, "sanitized": False, "sanitized_flows":[]}
-                    else:
-                        tainted_vars[var] = {"source":possibleSources, "sanitized": False,"sanitized_flows":[]}
+                if(var not in tainted_vars.vars.keys()):
+                    tainted_vars.add_new(var, False, possibleSources, [])
 
     def check_for_tainted_assignments(assignments, tainted_vars, instantiated_vars, tainted_sinks):
 
