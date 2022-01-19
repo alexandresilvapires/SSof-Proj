@@ -2,6 +2,7 @@
 
 # JSON Program utils
 
+from inspect import getcallargs
 from ast_utils import *
 
 # Tainted var class holds info about every tainted var
@@ -178,7 +179,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
 
         return is_sanitized, tainted_count
 
-    def add_tainted_vars_to_dict(tainted_vars, instantiated_vars, var_ids, called_ids, target_ids):
+    def add_tainted_vars_to_dict(tainted_vars, instantiated_vars, var_ids, calls, target_ids):
         """
         Add every target ID to the list of tainted vars, as unsanitized
         and add the uninstantiated vars as tainted too
@@ -194,29 +195,47 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         sources = []
         sanitized_flows = []
 
-        # Add uninstantiated vars to the list 
         for v in var_ids:
+            # Add uninstantiated vars to the list 
             if v not in instantiated_vars and v not in tainted_vars.vars:
                 tainted_vars.add_new(v, False, v, [])
                 sources.append(v)
+            # Add sources
             elif v in tainted_vars.vars:
                 sources.extend(tainted_vars.get_source_from_var(v))
                 sanitized_flows.extend(tainted_vars.get_all_sanitized_flows_from_var(v))
 
+        for call in calls:
+            callID = getCallID(call)
+
+            # check if call is source
+            if(callID in sources):
+                sources.append(callID)
+
+            # check if it is sanitization
+            # a = sanit(algo(source()))
+            for arg in call["args"]:
+                if(arg["ast_type"] == "Name"):
+                    
+            if(callID in sanitization):
+
+
         for v in target_ids:
-            if v not in tainted_vars.vars:
-                tainted_vars.add_new(v, False, sources, sanitized_flows)
-            else:
-                tainted_vars.add_sanitized_flow(v, sanitized_flows)
-            add_call_sources_to_var(v)
+            if(sources != []):
+                if v not in tainted_vars.vars:
+                    tainted_vars.add_new(v, False, sources, sanitized_flows)
+                else:
+                    tainted_vars.add_sanitized_flow(v, sanitized_flows)
+                add_call_sources_to_var(v)
             
 
-    def update_tainted_values(assignment, tainted_vars, target_ids, is_sanitized, called_ids):
-        if is_sanitized:
-            # If anything is sanitized, and no taints were made (tainted == 0),
-            # then the variables were totally sanitized, 
-            # so every target ID's sanitization value is set to true
-            called_sanitizations = list(set(called_ids) & set(sanitization))
+    def update_tainted_values(assignment, tainted_vars, target_ids, called_ids):
+        # If anything is sanitized, and no taints were made (tainted == 0),
+        # then the variables were totally sanitized, 
+        # so every target ID's sanitization value is set to true
+        called_sanitizations = list(set(called_ids) & set(sanitization))
+
+        if(called_sanitizations != []):
             for v in target_ids:
                 sources = []
                 for c_id in called_ids:
@@ -229,7 +248,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 
                 print(sources)
                 
-                if v in tainted_vars:
+                if v in tainted_vars.vars:
                     print("v:", v, "in tainted_vars")
                     tainted_vars.set_sanitized(v, True)
                     tainted_vars.add_source(v, sources)
@@ -342,19 +361,8 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
 
     def check_for_tainted_assignments(assignments, tainted_vars, instantiated_vars, tainted_sinks):
 
-        #TODO: CHECK FOR CHAINED FUNCTIONS
-
         for assignment in assignments:
-            """
-            Counts every time an entry point or tainted variable is used in 
-            an assignment.
-            """
-            tainted_count = 0   
-
-            calls = getNodesOfType(assignment, "Call")
-
-            """ List of function names that were called in the assignment """
-            called_ids = [getCallID(c) for c in calls]
+            calls = getAssignmentCalls(assignment, "Call")
             
             """ List of variable ids that were used on the right side of the assignment """
             var_ids = getAssignmentValues(assignment)
@@ -362,18 +370,9 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             """ List of target variables, used on the left side of the assignment """
             target_ids = getAssignmentTargets(assignment)
 
-            """Sum of variables where an assignment was an entry point"""
-            tainted_count += sum(1 for e in entry_points if e in called_ids)
-
-            """Sum of variables that were assigned the value of a tainted var (even if as an arg)"""
-            tainted_count += sum(1 for v in var_ids if v in tainted_vars.vars or v not in instantiated_vars)
-                    
-            is_sanitized, tainted_count = check_sanitization(calls, var_ids, tainted_vars, tainted_count)
+            add_tainted_vars_to_dict(tainted_vars, instantiated_vars, var_ids, calls, target_ids)
             
-            if tainted_count > 0:
-                add_tainted_vars_to_dict(tainted_vars, instantiated_vars, var_ids, called_ids, target_ids)
-            else:
-                update_tainted_values(assignment, tainted_vars, target_ids, is_sanitized, called_ids)
+            update_tainted_values(assignment, tainted_vars, target_ids, calls)
                             
             update_instantiated_variables(instantiated_vars, target_ids)
 
