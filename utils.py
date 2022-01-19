@@ -11,16 +11,6 @@ class taintedVars:
     def __init__(self):
         self.vars = {}   # each entry is a tainted var_id, associated with a dict
                     # that holds its info ("sanitized", "sources", "sanitized_flows")
-
-    def set_sanitized(self, var_id, value: bool):
-        self.vars[var_id]["sanitized"] = value
-
-    def add_sanitized_flow(self, var_id, flow):
-        flw = flow if isinstance(flow, list) else [flow]
-        if "sanitized_flows" in self.vars[var_id]:
-            self.vars[var_id]["sanitized_flows"].extend(flw)
-        else:
-            self.vars[var_id]["sanitized_flows"] = flw
             
     def add_source(self, var_id, source):
         src = source if isinstance(source, list) else [source]
@@ -29,11 +19,21 @@ class taintedVars:
         else:
             self.vars[var_id]["source"] = src
 
+    def get_source(self, var_id):
+        return self.vars[var_id]["source"]
+
+    def set_sanitized(self, var_id, value: bool):
+        self.vars[var_id]["sanitized"] = value
+
     def get_is_sanitized(self, var_id):
         return self.vars[var_id]["sanitized"]
 
-    def get_source(self, var_id):
-        return self.vars[var_id]["source"]
+    def add_sanitized_flow(self, var_id, flow):
+        flw = flow if isinstance(flow, list) else [flow]
+        if "sanitized_flows" in self.vars[var_id]:
+            self.vars[var_id]["sanitized_flows"].extend(flw)
+        else:
+            self.vars[var_id]["sanitized_flows"] = flw
 
     def get_sanitized_flows(self, var_id):
         return self.vars[var_id]["sanitized_flows"]
@@ -43,6 +43,35 @@ class taintedVars:
         self.set_sanitized(var_id, sanitized)
         self.add_sanitized_flow(var_id, sanitized_flows)
         self.add_source(var_id, sources)
+    
+    def get_prop_from_var(self, var_id, fun):
+        vars_to_check = [var_id]
+
+        # enquanto nenhuma das variaveis x_i da lista for uma das suas proprias sources
+        # entao adicionamos as sources de x_i à lista de variáveis e, se alguma
+        # das sources de x_i nao for tainted, retornamos
+
+        while any(x_i not in fun(self.vars, x_i) for x_i in vars_to_check):
+            new_vars = []
+            for x in vars_to_check:
+                
+                for source in fun(self.vars, x):
+                    
+                    if source not in self.vars:
+                        return source
+
+                new_vars.extend(fun(self.vars, x))
+
+            vars_to_check = new_vars
+
+        return vars_to_check
+
+    def get_source_from_var(self, var_id):
+        """ Given a var ID and the tainted_vars dict, returns the source of the taint recursively """
+        return self.get_prop_from_var(var_id, self.get_source)
+
+    def get_all_sanitized_flows_from_var(self, var_id):
+        return self.get_prop_from_var(var_id, self.get_sanitized_flows)
 
 
 def call2dict(call):
@@ -121,35 +150,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
 
     # -------------------------- AUXILIARY FUNCTIONS --------------------------
 
-    def get_prop_from_var(tainted_vars, var_id, fun):
-        vars_to_check = [var_id]
-
-        # enquanto nenhuma das variaveis x_i da lista for uma das suas proprias sources
-        # entao adicionamos as sources de x_i à lista de variáveis e, se alguma
-        # das sources de x_i nao for tainted, retornamos
-
-        while any(x_i not in fun(tainted_vars, x_i) for x_i in vars_to_check):
-            new_vars = []
-            for x in vars_to_check:
-                
-                for source in fun(tainted_vars, x):
-                    
-                    if source not in tainted_vars:
-                        return source
-
-                new_vars.extend(fun(tainted_vars, x))
-
-            vars_to_check = new_vars
-
-        return vars_to_check
-
-    def get_source_from_var(tainted_vars, var_id):
-        """ Given a var ID and the tainted_vars dict, returns the source of the taint recursively """
-        return get_prop_from_var(tainted_vars, var_id, tainted_vars.get_source)
-
-    def get_all_sanitized_flows_from_var(tainted_vars, var_id):
-        return get_prop_from_var(tainted_vars, var_id, tainted_vars.get_sanitized_flows)
-
     def check_sanitization(calls, var_ids, tainted_vars, tainted_count):
         """
         For every call made, if the arg was tainted, set sanitized bool to true
@@ -192,8 +192,8 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 tainted_vars.add_new(v, False, v, [])
                 sources.append(v)
             elif v in tainted_vars:
-                sources.extend(get_source_from_var(tainted_vars, v))
-                sanitized_flows.extend(get_all_sanitized_flows_from_var(tainted_vars, v))
+                sources.extend(tainted_vars.get_source_from_var(v))
+                sanitized_flows.extend(tainted_vars.get_all_sanitized_flows_from_var(v))
 
         for v in target_ids:
             if v not in tainted_vars.vars:
@@ -217,7 +217,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                     for c in call:
                         args += getCallArgsID(c)
                         print(args)
-                        sources.extend(get_source_from_var(tainted_vars, args[-1]))
+                        sources.extend(tainted_vars.get_source_from_var(args[-1]))
                 
                 print(sources)
                 
