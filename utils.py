@@ -331,6 +331,8 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 add_new_tainted_var(tainted_vars, v, False, v, [])
                 sources.append(v)
             elif v in tainted_vars:
+                if v in entry_points:
+                    sources.append(v)
                 sources.extend(get_source_from_var(tainted_vars, v))
                 sanitized_flows.extend(get_all_sanitized_flows_from_var(tainted_vars, v))
 
@@ -355,39 +357,62 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                     call = getCallsWithID(assignment, c_id)
                     for c in call:
                         args += getArgsIDFromCall(c)
-                        print(args)
                         sources.extend(get_source_from_var(tainted_vars, args[-1]))
                 
-                print(sources)
-                
                 if v in tainted_vars:
-                    print("v:", v, "in tainted_vars")
                     set_sanitized_tainted_var(tainted_vars, v, True)
                     add_source_to_tainted_var(tainted_vars, v, sources)
                     add_sanitized_flow_tainted_var(tainted_vars, v, called_sanitizations)
                 else:
                     add_new_tainted_var(tainted_vars, v, True, sources, called_sanitizations)
-                    print(tainted_vars)
         else:
             # Every target ID is now clean, as the value attributed is totally clean
             for value in target_ids:
                 if value in tainted_vars:
                     tainted_vars.pop(value)
 
-    def get_tainted_sinks(line, tainted_vars, called_ids, target_ids=None):
+    def add_tainted_sink(tainted_sinks, sink, sources, is_sanitized, s_flows):
+        def add_s_flows_and_set_sanitized():
+            for src in sources:
+                current_s_flows = tainted_sinks[sink]["sanitized_flows"]
+
+                if src in current_s_flows:
+                    current_s_flows[src].extend(s_flows)
+                else:
+                    current_s_flows[src] = s_flows.copy()
+
+                #! Update rule needs reviewing!!!!!!!
+                tainted_sinks[sink]["is_sanitized"][src] = is_sanitized
+
+        #! needs to be refactored and create abstract data type
+        if sink in tainted_sinks:
+            current_sources = tainted_sinks[sink]["source"]
+            tainted_sinks[sink]["source"].extend([src for src in sources if src not in current_sources])
+            
+            add_s_flows_and_set_sanitized()
+
+        else:
+            tainted_sinks[sink] = {}
+            tainted_sinks[sink]["source"] = sources.copy()
+            tainted_sinks[sink]["is_sanitized"] = {}
+            tainted_sinks[sink]["sanitized_flows"] = {}
+
+            add_s_flows_and_set_sanitized()
+            
+    def update_tainted_sinks(line, tainted_vars, called_ids, target_ids=None):
         """ Gets the sinks that were tainted by this line. """
+
         def add_tainted_sink_with_id(var_id, sink):
             src = get_source_tainted_var(tainted_vars, var_id)
             is_sanitized = get_is_sanitized_tainted_var(tainted_vars, var_id)
             s_flows = get_sanitized_flows_tainted_var(tainted_vars, var_id)
-            print(f"\"{var_id}\"",src, is_sanitized, s_flows)
-            ret.append((src, sink, is_sanitized, s_flows))
 
-        def add_tainted_sink(sources, sink, sanitized, s_flows):
+            add_tainted_sink(tainted_sinks, sink, src, is_sanitized, s_flows)
+
+        def add_tainted_sink_w_props(sources, sink, sanitized, s_flows):
             srcs = sources if isinstance(sources, list) else [sources]
-            ret.append((srcs, sink, sanitized, s_flows))
+            add_tainted_sink(tainted_sinks, sink, srcs, sanitized, s_flows)
 
-        ret = []
         for sink in sinks:
             if sink in called_ids:
                 call = getCallsWithID(line, sink)
@@ -399,18 +424,14 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 for src in entry_points:
                     if src in sink_args:
                         #! SANITIZED FLOWS?
-                        print(src, "this will have not sanitized flows")
-                        add_tainted_sink(src, sink, False, [])
+                        add_tainted_sink_w_props(src, sink, False, [])
 
                 for t in tainted_vars:
                     if t in sink_args:
-                        print("adding",t,"to the list")
                         add_tainted_sink_with_id(t, sink)
 
             elif target_ids and (sink in tainted_vars and sink in target_ids):
                 add_tainted_sink_with_id(sink, sink)
-        
-        return ret
 
     def update_instantiated_variables(instantiated_vars, target_ids):
         """ 
@@ -519,12 +540,12 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                             
             update_instantiated_variables(instantiated_vars, target_ids)
 
-            tainted_sinks.extend(get_tainted_sinks(line, tainted_vars, called_ids, target_ids))
+            update_tainted_sinks(line, tainted_vars, called_ids, target_ids)
     
-    def check_for_lonely_call_tainting(line, tainted_vars, tainted_sinks):
+    def check_for_lonely_call_tainting(line, tainted_vars):
         lonely_calls = getNodesOfType(line, "Call")
         called_ids = [getFunctionNameFromCall(call) for call in lonely_calls]
-        tainted_sinks.extend(get_tainted_sinks(line, tainted_vars=tainted_vars, called_ids=called_ids))
+        update_tainted_sinks(line, tainted_vars=tainted_vars, called_ids=called_ids)
 
     # ----------------------------- MAIN FUNCTION -----------------------------
 
@@ -544,7 +565,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
     """
     instantiated_vars = []
 
-    tainted_sinks = []
+    tainted_sinks = {}
 
     for line in getLines(tree):
         
@@ -561,6 +582,15 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             
         else:
             calls = getNodesOfType(line, "Call")
-            if(calls != []):
-                check_for_lonely_call_tainting(line, tainted_vars=tainted_vars, tainted_sinks=tainted_sinks)
+            if calls != []:
+                check_for_lonely_call_tainting(line, tainted_vars=tainted_vars)
     return tainted_sinks
+
+def get_source_from_vuln(vuln):
+    return vuln["source"]
+
+def get_is_sanitized_from_vuln(vuln, src):
+    return vuln["is_sanitized"][src]
+
+def get_sanitized_flows_from_vuln(vuln, src):
+    return vuln["sanitized_flows"][src]

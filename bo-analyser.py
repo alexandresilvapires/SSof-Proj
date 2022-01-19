@@ -28,19 +28,22 @@ def main():
         print("-- Testing program for vulnerability", vuln_name, "--")
         print("-- Checking information flows --\n")
 
-        caught = utils.track_taint(tree, v["sources"], v["sanitizers"], v["sinks"], v["implicit"] == "yes")
+        caught = utils.track_taint(tree, v["sources"], v["sanitizers"], v["sinks"], False)
             
-        for vuln in caught:
-            sources, sink, is_sanitized, s_flows = vuln
+        for sink_name in caught:
+            sources = utils.get_source_from_vuln(caught[sink_name])
 
             for source in sources:    
+                is_sanitized = utils.get_is_sanitized_from_vuln(caught[sink_name], source)
+                s_flows = utils.get_sanitized_flows_from_vuln(caught[sink_name], source)
+
                 vuln_counts[vuln_name] += 1       
-                if is_sanitized:
-                    caughtVuns.append({"vulnerability":f'{vuln_name}_{vuln_counts[vuln_name]}', "source":source, "sink":sink, 
-                                    "unsanitized flows": "no", "sanitized flows": s_flows})
-                else:
-                    caughtVuns.append({"vulnerability":f'{vuln_name}_{vuln_counts[vuln_name]}', "source":source, "sink":sink, 
-                                    "unsanitized flows": "yes", "sanitized flows": s_flows})
+                caughtVuns.append({ "vulnerability": f'{vuln_name}_{vuln_counts[vuln_name]}',
+                                    "source":source,
+                                    "sink": sink_name, 
+                                    "unsanitized flows": "no" if is_sanitized else "yes",
+                                    "sanitized flows": s_flows
+                                    })
 
     print("----- Final Results -----")
     print(caughtVuns)
