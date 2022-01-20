@@ -129,20 +129,43 @@ def getAssignmentCalls(tree):
     # and return the remaining names
     calls = []
 
-    if(tree["ast_type"] == "Calls"):
+    if(tree["ast_type"] == "Call"):
         calls.append(tree)
     elif(tree["ast_type"] == "BinOp"):
         calls += getAssignmentCalls(tree["left"]) + getAssignmentCalls(tree["right"])
-    elif(tree["ast_type" == "Compare"]):
+    elif(tree["ast_type"] == "Compare"):
         for comps in tree["comparators"]:
             calls += getAssignmentCalls(comps) + getAssignmentCalls(tree["left"])
     elif(tree["ast_type"] == "Expr"):
         calls += getAssignmentCalls(tree["value"])
-    elif(tree["ast_type"] == "Assignment"):
-        for val in tree["value"]:
-            calls.append(getAssignmentCalls(val))
+    elif(tree["ast_type"] == "Assign"):
+        calls += getAssignmentCalls(tree["value"])
 
     return calls
+
+def getCallArgVariableIDs(tree):
+    """ Given a tree that is a call, returns the list of variable arguments """
+        
+    # Terrible way to do this, get every named node, get every name that is from a function
+    # and return the remaining names
+    vars = []
+
+    if(tree["ast_type"] == "BinOp"):
+        vars += getCallArgVariableIDs(tree["left"]) + getCallArgVariableIDs(tree["right"])
+    elif(tree["ast_type"] == "Compare"):
+        for comps in tree["comparators"]:
+            vars += getCallArgVariableIDs(comps) + getCallArgVariableIDs(tree["left"])
+    elif(tree["ast_type"] == "Expr"):
+        vars += getCallArgVariableIDs(tree["value"])
+    elif(tree["ast_type"] == "Assign"):
+        vars += getCallArgVariableIDs(tree["value"])
+    elif(tree["ast_type"] == "Call"):
+        for arg in tree["args"]:
+            vars += getCallArgVariableIDs(arg)
+    elif(tree["ast_type"] == "Name"):
+        vars.append(tree["id"])
+
+    return vars
 
 # ASSIGNMENT FUNCTIONS
         
@@ -169,39 +192,15 @@ def getAssignmentValues(tree):
         names.append(tree["id"])
     elif(tree["ast_type"] == "BinOp"):
         names += getAssignmentValues(tree["left"]) + getAssignmentValues(tree["right"])
-    elif(tree["ast_type" == "Compare"]):
+    elif(tree["ast_type"] == "Compare"):
         for comps in tree["comparators"]:
             names += getAssignmentValues(comps) + getAssignmentValues(tree["left"])
     elif(tree["ast_type"] == "Expr"):
         names += getAssignmentValues(tree["value"])
-    elif(tree["ast_type"] == "Assignment"):
-        for val in tree["value"]:
-            names.append(getAssignmentValues(val))
+    elif(tree["ast_type"] == "Assign"):
+        names += getAssignmentValues(tree["value"])
 
     return names
-
-#def getAssignmentsFromVarWithID(tree, id):
-#    """Given a tree and an ID of a variable, returns the list of assignments where
-#        the given variable was used as the value of the assignment"""
-#    assignments = []
-#    assigns = getNodesOfType(tree, "Assign")
-#    
-#    for a in assigns:
-#        if(a["value"]["ast_type"] == "Name" and a["value"]["id"] == id):
-#                assignments = assignments + [a]
-#    return assignments
-#
-#def getVarsAssinedAsTargetWithID(tree, id):
-#    """Given a tree and an ID of a variable, returns the list of IDs of vars 
-#        that where assigned a value of the given variable ID"""
-#    assignments = []
-#    assigns = getAssignmentsFromVarWithID(tree, id)
-#    
-#    for a in assigns:
-#        for t in a["targets"]:
-#            if(t["value"]["ast_type"] == "Name"):
-#                    assignments = assignments + [t["value"]["id"] ]
-#    return assignments
 
 # COMPARISON FUNCTIONS
 
