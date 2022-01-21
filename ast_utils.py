@@ -184,8 +184,6 @@ def getAssignmentValues(tree):
     """ Given a tree that is an assignment, returns the list of variable ids used
         in the assignment"""
         
-    # Terrible way to do this, get every named node, get every name that is from a function
-    # and return the remaining names
     names = []
 
     if(tree["ast_type"] == "Name"):
