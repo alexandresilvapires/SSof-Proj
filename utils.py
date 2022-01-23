@@ -287,7 +287,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 
         return sources_flows
 
-    def add_tainted_vars_to_dict(tainted_vars, instantiated_vars, var_ids, calls, target_ids, tainted_sinks):
+    def add_tainted_vars_to_dict(tainted_vars, instantiated_vars, var_ids, calls, target_ids, tainted_sinks,clean):
         """
         Add every target ID to the list of tainted vars, as unsanitized
         and add the uninstantiated vars as tainted too
@@ -376,9 +376,9 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                         srcs = tainted_vars.get_sources(v)
                         for src in srcs:
                             if src not in tainted_sinks[v]["source"]:
-                                tainted_sinks[v]["source"].update({src: s[src]})
+                                tainted_sinks[v]["source"].update({src: srcs[src]})
                             else:
-                                for flow in s[src]:
+                                for flow in srcs[src]:
                                     if flow not in tainted_sinks[v]["source"][src]:
                                         tainted_sinks[v]["source"][src].append(flow)
 
@@ -390,8 +390,9 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                                             }
             
         # No vars or calls were assigned, every target is no longer tainted!
-        else:
+        elif(clean):
             for v in target_ids:
+                print("Cleaning",v)
                 if(v in tainted_vars.vars):
                     tainted_vars.vars.pop(v)
                     
@@ -415,15 +416,11 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             elif(var in tainted_vars.vars):
                 possiblyImplicit = True
                 
-            # Add every var in cond as a possible source if an implicit flow is possible
-            elif((var not in tainted_vars.vars)):
-                possiblyImplicit = True
-                
         for call in callsInCond:
             if(getCallID(call) in entry_points):
                 possiblyImplicit = True
                 
-                
+        print("Is implicit:",possiblyImplicit)
         if(possiblyImplicit):
             for var in varsUsedInCond:
                 if(var not in instantiated_vars):
@@ -446,7 +443,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         # must also be considered implicitly tainted
         # So we update the tainted_vars to consider every new implicitly tainted var
         # TODO: We also must consider sanitization of these variables 
-
             for var in varsUsed:
                 if(var not in tainted_vars.vars):
                     tainted_vars.add_new(var, False, possibleSources)
@@ -454,10 +450,9 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                     for s in possibleSources:
                         tainted_vars.add_sanitized_flow(var, s, possibleSources[s])
 
-    def check_for_tainted_assignments(assignments, tainted_vars, instantiated_vars, tainted_sinks):
+    def check_for_tainted_assignments(assignments, tainted_vars, instantiated_vars, tainted_sinks, clean):
 
         for assignment in assignments:
-            print("skrr")
             calls = getAssignmentCalls(assignment)
             
             """ List of variable ids that were used on the right side of the assignment """
@@ -466,11 +461,11 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             """ List of target variables, used on the left side of the assignment """
             target_ids = getAssignmentTargets(assignment)
 
-            add_tainted_vars_to_dict(tainted_vars, instantiated_vars, var_ids, calls, target_ids, tainted_sinks)
+            add_tainted_vars_to_dict(tainted_vars, instantiated_vars, var_ids, calls, target_ids, tainted_sinks,clean)
             
             update_instantiated_variables(instantiated_vars, target_ids)
-
-            print(tainted_vars.vars)
+            
+            print("tainted vars:",tainted_vars.vars)
 
     def check_for_lonely_call_tainting(line, tainted_vars, tainted_sinks, instantiated_vars):
         lonely_calls = getNodesOfType(line, "Call")
@@ -501,16 +496,21 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
 
     for line in getLines(tree):
         
+        clean_untainted_targets = True # When in conditionals with implicit flows
+                                        # Even clean assignments can pass taint
+        
         # check implicit flows if conditionals exist
         if(checkImplicit):
             if(line["ast_type"] == "If" or line["ast_type"] == "While"):
+                clean_untainted_targets = False
                 check_for_implicit_flows(line, tainted_vars=tainted_vars, instantiated_vars=instantiated_vars, tainted_sinks=tainted_sinks)
         
         # Also check for explicit flows
         assignments = getNodesOfType(line, "Assign")
 
         if assignments != []:
-            check_for_tainted_assignments(assignments, tainted_vars=tainted_vars, instantiated_vars=instantiated_vars, tainted_sinks=tainted_sinks)
+            check_for_tainted_assignments(assignments, tainted_vars=tainted_vars, instantiated_vars=instantiated_vars, 
+                                        tainted_sinks=tainted_sinks, clean=(clean_untainted_targets and checkImplicit))
             
         else:
             calls = getNodesOfType(line, "Call")
