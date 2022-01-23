@@ -29,11 +29,13 @@ def main():
         print("-- Checking information flows --\n")
 
         caught = utils.track_taint(tree, v["sources"], v["sanitizers"], v["sinks"], v["implicit"] == "yes")
-            
-        for vuln in caught:
-            sources, sink, is_sanitized, s_flows = vuln
+        
+        for sink in caught:
+            sources = caught[sink]["source"]
+            is_sanitized = caught[sink]["is_sanitized"]
 
             for source in sources:    
+                s_flows = sources[source]
                 vuln_counts[vuln_name] += 1       
                 if is_sanitized:
                     caughtVuns.append({"vulnerability":f'{vuln_name}_{vuln_counts[vuln_name]}', "source":source, "sink":sink, 
@@ -43,7 +45,8 @@ def main():
                                     "unsanitized flows": "yes", "sanitized flows": s_flows})
 
     print("----- Final Results -----")
-    print(caughtVuns)
+    for vuln in caughtVuns:
+        print(vuln)
 
 if __name__ == '__main__':
     main()

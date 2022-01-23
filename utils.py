@@ -58,7 +58,6 @@ class taintedVars:
         while any(x_i not in fun(x_i) for x_i in vars_to_check):
             new_vars = []
             for x in vars_to_check:
-                
                 for source in fun(x):
                     
                     if source not in self.vars:
@@ -296,9 +295,10 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 for source in s:
                     sources_sanit[source] = sf
                 
-            if v in entry_points and v not in tainted_vars.vars:
-                tainted_vars.add_new(v, False, {v:[]})
-                sources_sanit[v] = []
+            if v in entry_points:
+                if v not in tainted_vars.vars:
+                    tainted_vars.add_new(v, False, {v:[]})
+                    sources_sanit[v] = []
 
         for call in calls:
             callID = getCallID(call)
@@ -318,8 +318,10 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 else:
                     for s in sources_sanit:
                         tainted_vars.add_sanitized_flow(v, s, sources_sanit[s])
+                
+                if v in entry_points:
+                    tainted_vars.add_source(v, v)
                         
-                    
             # Update the attributed var's sanitization
             attribSanitization = 0  # Var or call being attributed increases the counter
                                     # If the var or call is sanitized, the counter decreases.
@@ -353,7 +355,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
 
                         tainted_sinks[v]["is_sanitized"] = tainted_vars.get_is_sanitized(v)
                     else:
-                        tainted_sinks[v] = {
+                        tainted_sinks[v] = { #! Problem is here
                                             "source": tainted_vars.get_sources(v),
                                             "is_sanitized": tainted_vars.get_is_sanitized(v)
                                             }
@@ -438,9 +440,11 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             
             update_instantiated_variables(instantiated_vars, target_ids)
 
-    def check_for_lonely_call_tainting(line, tainted_vars, tainted_sinks):
+    def check_for_lonely_call_tainting(line, tainted_vars, tainted_sinks, instantiated_vars):
         lonely_calls = getNodesOfType(line, "Call")
-        called_ids = [getCallID(call) for call in lonely_calls]
+        for call in lonely_calls:
+            get_sources_sanitflows_from_call(call, tainted_vars, instantiated_vars, tainted_sinks)
+
         #tainted_sinks.extend(get_tainted_sinks(line, tainted_vars=tainted_vars, called_ids=called_ids))
 
     # ----------------------------- MAIN FUNCTION -----------------------------
@@ -479,6 +483,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         else:
             calls = getNodesOfType(line, "Call")
             if(calls != []):
-                check_for_lonely_call_tainting(line, tainted_vars=tainted_vars, tainted_sinks=tainted_sinks)
+                check_for_lonely_call_tainting(line, tainted_vars=tainted_vars, tainted_sinks=tainted_sinks, instantiated_vars=instantiated_vars)
         
     return tainted_sinks
