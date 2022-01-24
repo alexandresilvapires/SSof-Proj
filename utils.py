@@ -226,7 +226,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 
                 # If the current function is a sanitization function, add it to the sanitized flows
                 if(callID in sanitization):
-                    #? Shouldn't this be sanitized, and hence is_sanitized = True?
                     tainted_vars.add_new(var, True, {var:[callID]})
                     sources_flows[var] = [callID]
                 else:
@@ -247,44 +246,42 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                                                 }
                     
                     tainted_sinks[callID]["is_sanitized"] = sources_flows[var] != []
-                    
-
+        
         for arg in call["args"]:
             # Case for chained functions
             if arg["ast_type"] == "Call":
-                arg_call_id = getCallID(arg)
-
                 # Check chained function args
                 arg_sources_flows = get_sources_sanitflows_from_call(arg,
                                                                     tainted_vars,
                                                                     instantiated_vars,
                                                                     tainted_sinks)
-                
-                # Add this sanitization function to the flows
-                if callID in sanitization:
-                    for var in arg_sources_flows:
-                        arg_sources_flows[var].append(callID)
-
-                    #? If function sanitizes the functions called?
-                sources_flows.update(arg_sources_flows)
+                for src in arg_sources_flows:
+                    sources_flows.update({src: arg_sources_flows[src].copy()})
 
                 # Update the tainted sinks
                 for var in arg_sources_flows:
                     if callID in sinks:
                         if callID in tainted_sinks:
                             if var not in tainted_sinks[callID]["source"]:
-                                tainted_sinks[callID]["source"].update({var: sources_flows[var]})
+                                tainted_sinks[callID]["source"].update({var: arg_sources_flows[var].copy()})
                             else:
                                 for flow in sources_flows[var]:
                                     if flow not in tainted_sinks[callID]["source"][var]:
                                         tainted_sinks[callID]["source"][var].append(flow)
                         else:
                             tainted_sinks[callID] = {
-                                                    "source": {var: sources_flows[var]},
+                                                    "source": {var: arg_sources_flows[var].copy()},
                                                     }
                         
                         tainted_sinks[callID]["is_sanitized"] = sources_flows[var] != []
-                
+
+
+                # Add this sanitization function to the flows~
+                if callID in sanitization:
+                    for src in arg_sources_flows:
+                        arg_sources_flows[src].append(callID)
+                        sources_flows.update({src: arg_sources_flows[src].copy()})
+                        
         return sources_flows
 
     def add_tainted_vars_to_dict(tainted_vars, instantiated_vars, var_ids, calls, target_ids, tainted_sinks,clean):
@@ -319,7 +316,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             elif v in tainted_vars.vars:
                 print("Tainted var found", v)
                 s = tainted_vars.get_all_sources_from_var(v)
-                print("source:",s)
                 sf = tainted_vars.get_all_sanitized_flows_from_var(v)
                 for source in s:
                     sanitized_flows_source[source] = sf
@@ -392,7 +388,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         # No vars or calls were assigned, every target is no longer tainted!
         elif(clean):
             for v in target_ids:
-                print("Cleaning",v)
                 if(v in tainted_vars.vars):
                     tainted_vars.vars.pop(v)
                     
