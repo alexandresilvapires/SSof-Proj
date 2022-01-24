@@ -1,3 +1,6 @@
+import copy
+from mailbox import linesep
+
 # GENERAL FUNCTIONS
 
 def getLines(tree):
@@ -221,3 +224,96 @@ def getComparisonIDs(tree):
             names.append(n["id"])
             
     return names
+
+# TREE CONDITIONAL HANDELING
+
+def popLineFromTree(tree, line):
+    
+    def popLineFromTreeAux(tree, line):
+        # see conditionals
+        for i in range(0, len(tree["body"])):
+            if(tree["body"][i] == line):
+                return True, i, tree
+            elif(tree["body"][i]["ast_type"] == "If"):
+                inIf, newI, _ = popLineFromTreeAux(tree["body"][i], line)
+                inElse, newI, _ = popLineFromTreeAux(tree["orelse"][i], line)
+                if(inIf):
+                    tree["body"][i]["body"].pop(newI)
+                    return True, newI, tree
+                elif(inElse):
+                    tree["body"][i]["orelse"].pop(newI)
+                    return True, newI, tree
+            elif(tree["body"][i]["ast_type"] == "While"):
+                inWhile, newI, _ = popLineFromTreeAux(tree["body"][i], line)
+                if(inWhile):
+                    tree["body"][i]["body"].pop(newI)
+                    return True, newI, tree
+                    
+        return False, -1, tree
+    _, _, newTree = popLineFromTreeAux(tree, line)
+    return newTree
+
+def getAllTrees(tree):
+    trees = []
+    
+    for i in range(0, len(getLines(tree))):
+        # If we have an if, we want to make a version with only the if and one with only the else
+        if(tree["body"][i]["ast_type"] == "If"):
+            # A version without the else turns the else body into empty
+            withIf = copy.deepcopy(tree)
+            
+            withIf["body"][i]["orselse"] = []
+            
+            # Check for recursive ifs 
+            newIfBodies = getAllTrees(withIf["body"][i])
+            for new in newIfBodies:
+                newTree = copy.deepcopy(withIf)
+                newTree["body"][i]["body"] = new
+                trees.append(newTree)
+            if(newIfBodies == []):
+                trees.append(withIf)
+                
+            
+            # A version without the if keeps the condition for implicit flow tracking but replaces
+            # the if body with the else body, and removes the other else body
+            withElse = copy.deepcopy(tree)
+            
+            withElse["body"][i]["body"] = withElse["body"][i]["orelse"]
+            withElse["body"][i]["orelse"] = []
+            
+            # Check for recursive ifs 
+            newIfBodies = getAllTrees(withElse["body"][i])
+            for new in newIfBodies:
+                newTree = copy.deepcopy(withIf)
+                newTree["body"][i]["body"] = new
+                trees.append(newTree)
+            if(newIfBodies == []):
+                trees.append(withIf)
+            trees.append(withElse)
+            
+        # If we have a while, we duplicate the body to unroll the loop and check all the subtrees the body can have
+        elif(tree["body"][i]["ast_type"] == "While"):
+            withWhile = copy.deepcopy(tree)
+            
+            # Unroll the loop
+            newLines = getLines(tree["body"][i]) + getLines(tree["body"][i])
+            withWhile["body"][i]["body"] = newLines
+            
+            subtrees = getAllTrees(withWhile["body"][i])
+            for st in subtrees:
+                newTree = copy.deepcopy(withWhile)
+                newTree["body"][i]["body"] = st
+                trees.append(st)
+            
+            if(subtrees == []):
+                trees.append(withWhile)
+                
+            # add subtree without while
+            newTree = copy.deepcopy(tree)
+            newTree = popLineFromTree(tree, tree["body"][i])
+            trees.append(newTree)
+
+    if(trees == []):
+        return [tree]
+    else:
+        return trees

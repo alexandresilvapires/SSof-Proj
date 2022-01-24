@@ -1,5 +1,6 @@
 import argparse
 import json
+from ast_utils import getAllTrees, getLines
 
 import utils
 
@@ -12,7 +13,7 @@ def main():
     
     # Parse the program to an AST
     tree = json.loads(open(parsed.program).read())
-    
+
     # Get a list of dictionaries with each vulnerability
     vulnerability = json.load(open(parsed.patterns))
     
@@ -28,6 +29,14 @@ def main():
         print("-- Testing program for vulnerability", vuln_name, "--")
         print("-- Checking information flows --\n")
 
+        #allTrees = getAllTrees(tree)
+        #print(len(allTrees))
+        #for line in getLines(allTrees[0]):
+        #    print(line)
+        
+        #caught = {}
+        #for t in allTrees:
+        #    caught.update(utils.track_taint(t, v["sources"], v["sanitizers"], v["sinks"], v["implicit"] == "yes"))
         caught = utils.track_taint(tree, v["sources"], v["sanitizers"], v["sinks"], v["implicit"] == "yes")
         
         for sink in caught:
