@@ -490,7 +490,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
     tainted_sinks = {}
 
     for line in getLines(tree):
-        
         clean_untainted_targets = True # When in conditionals with implicit flows
                                         # Even clean assignments can pass taint
         

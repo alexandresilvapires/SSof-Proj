@@ -10,6 +10,9 @@ def getNodesOfType(tree, type):
     """Returns the a list of nodes with a certain type"""
     nodes = []
 
+    print("analysing tree")
+    print(tree)
+
     #List that contains every type of node the program includes
     #toCheck = ["Constant","Name","Expr","BinOp","Compare","Call","Attribute","Assign","If","While"]
     if(tree["ast_type"] == "Constant"):
@@ -233,20 +236,21 @@ def popLineFromTree(tree, line):
         # see conditionals
         for i in range(0, len(tree["body"])):
             if(tree["body"][i] == line):
+                tree["body"].pop(i)
                 return True, i, tree
             elif(tree["body"][i]["ast_type"] == "If"):
                 inIf, newI, _ = popLineFromTreeAux(tree["body"][i], line)
                 inElse, newI, _ = popLineFromTreeAux(tree["orelse"][i], line)
                 if(inIf):
-                    tree["body"][i]["body"].pop(newI)
+                    #tree["body"][i]["body"].pop(newI)
                     return True, newI, tree
                 elif(inElse):
-                    tree["body"][i]["orelse"].pop(newI)
+                    #tree["body"][i]["orelse"].pop(newI)
                     return True, newI, tree
             elif(tree["body"][i]["ast_type"] == "While"):
                 inWhile, newI, _ = popLineFromTreeAux(tree["body"][i], line)
                 if(inWhile):
-                    tree["body"][i]["body"].pop(newI)
+                    #tree["body"][i]["body"].pop(newI)
                     return True, newI, tree
                     
         return False, -1, tree
@@ -257,6 +261,8 @@ def getAllTrees(tree):
     trees = []
     
     for i in range(0, len(getLines(tree))):
+        if(i >= len(getLines(tree))):
+            break
         # If we have an if, we want to make a version with only the if and one with only the else
         if(tree["body"][i]["ast_type"] == "If"):
             # A version without the else turns the else body into empty
@@ -268,7 +274,7 @@ def getAllTrees(tree):
             newIfBodies = getAllTrees(withIf["body"][i])
             for new in newIfBodies:
                 newTree = copy.deepcopy(withIf)
-                newTree["body"][i]["body"] = new
+                newTree["body"][i] = new
                 trees.append(newTree)
             if(newIfBodies == []):
                 trees.append(withIf)
@@ -284,26 +290,24 @@ def getAllTrees(tree):
             # Check for recursive ifs 
             newIfBodies = getAllTrees(withElse["body"][i])
             for new in newIfBodies:
-                newTree = copy.deepcopy(withIf)
-                newTree["body"][i]["body"] = new
+                newTree = copy.deepcopy(withElse)
+                newTree["body"][i] = new
                 trees.append(newTree)
             if(newIfBodies == []):
-                trees.append(withIf)
-            trees.append(withElse)
+                trees.append(withElse)
             
         # If we have a while, we duplicate the body to unroll the loop and check all the subtrees the body can have
         elif(tree["body"][i]["ast_type"] == "While"):
             withWhile = copy.deepcopy(tree)
             
             # Unroll the loop
-            newLines = getLines(tree["body"][i]) + getLines(tree["body"][i])
-            withWhile["body"][i]["body"] = newLines
-            
+            withWhile["body"][i]["body"].extend(getLines(withWhile["body"][i]))
+
             subtrees = getAllTrees(withWhile["body"][i])
             for st in subtrees:
                 newTree = copy.deepcopy(withWhile)
-                newTree["body"][i]["body"] = st
-                trees.append(st)
+                newTree["body"][i] = st
+                trees.append(newTree)
             
             if(subtrees == []):
                 trees.append(withWhile)
