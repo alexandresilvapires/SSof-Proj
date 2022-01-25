@@ -34,11 +34,12 @@ def main():
         caught = {}
         for t in allTrees:
             caught_this_time = utils.track_taint(t, v["sources"], v["sanitizers"], v["sinks"], v["implicit"] == "yes")
+            
             for sink in caught_this_time:
                 if sink in caught:
                     for source in caught_this_time[sink]["source"]:
                         if source in caught[sink]["source"]:
-                            if caught_this_time[sink]["source"][source] not in caught[sink]["source"][source]:
+                            if caught_this_time[sink]["source"][source] not in caught[sink]["source"][source] and caught_this_time[sink]["source"][source] != []:
                                     caught[sink]["source"][source].append(caught_this_time[sink]["source"][source])
                         else:
                             caught[sink]["source"][source] = [copy.deepcopy(caught_this_time[sink]["source"][source])]
@@ -50,7 +51,7 @@ def main():
             sources = caught[sink]["source"]
             is_sanitized = caught[sink]["is_sanitized"]
 
-            for source in sources:    
+            for source in sources:
                 s_flows = sources[source]
                 vuln_counts[vuln_name] += 1       
                 if is_sanitized:

@@ -196,7 +196,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                     #* Big messy boiii
                     is_sanitized = tainted_vars.get_is_sanitized(var)
                     srcs = tainted_vars.get_sources(var)
-
                     if callID in tainted_sinks:
                         for src in srcs:
                             if src not in tainted_sinks[callID]["source"]:
@@ -210,8 +209,14 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                         #! This is slightly wrong.
                         tainted_sinks[callID]["is_sanitized"] = tainted_sinks[callID]["is_sanitized"] and is_sanitized
                     else:
+                        #! Might need to add these elsewhere, too
+                        s_flows_to_add = []
+                        for src in srcs:
+                            for s_flow in srcs[src]:
+                                if s_flow not in s_flows_to_add:
+                                    s_flows_to_add.append(s_flow)
                         tainted_sinks[callID] = {
-                                                "source": srcs,
+                                                "source": {var: s_flows_to_add},
                                                 "is_sanitized": is_sanitized
                                                 }
                     
