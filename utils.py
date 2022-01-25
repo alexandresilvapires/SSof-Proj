@@ -33,8 +33,11 @@ class taintedVars:
         flw = flow if isinstance(flow, list) else [flow]
         if(not "sources" in self.vars[var_id] or not source in self.vars[var_id]["sources"]):
             self.add_source(var_id, source)
-            
         self.vars[var_id]["sources"][source].extend(flw)
+        
+        self.vars[var_id]["sources"][source] = list(dict.fromkeys(self.vars[var_id]["sources"][source]))
+        
+        
 
     def get_sanitized_flows(self, var_id, source):
         return self.vars[var_id]["sources"][source]
@@ -210,13 +213,16 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                         tainted_sinks[callID]["is_sanitized"] = tainted_sinks[callID]["is_sanitized"] and is_sanitized
                     else:
                         #! Might need to add these elsewhere, too
-                        s_flows_to_add = []
-                        for src in srcs:
-                            for s_flow in srcs[src]:
-                                if s_flow not in s_flows_to_add:
-                                    s_flows_to_add.append(s_flow)
+                        #s_flows_to_add = []
+                        #for src in srcs:
+                        #    for s_flow in srcs[src]:
+                        #        if s_flow not in s_flows_to_add:
+                        #            s_flows_to_add.append(s_flow)
+
+                        # TODO: was {var: s_flows_to_add}, but 'srcs' is correct?
+                        print("---sources", srcs)
                         tainted_sinks[callID] = {
-                                                "source": {var: s_flows_to_add},
+                                                "source": srcs,
                                                 "is_sanitized": is_sanitized
                                                 }
                     
@@ -396,7 +402,15 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 if(v in tainted_vars.vars):
                     tainted_vars.vars.pop(v)
                     
-    def check_for_implicit_flows(line, tainted_vars=[], instantiated_vars=[], tainted_sinks=[]):
+        # Sanity check: no vars where at least one source has no sanit flow can be unsanitized
+        # but if no sanitized flows exist, it is surely unsanitized
+        for var in tainted_vars.vars:
+            for s in tainted_vars.get_sources(var):
+                if(tainted_vars.get_sanitized_flows(var, s) == []):
+                    tainted_vars.set_sanitized(var, False)
+                    break
+
+    def check_for_implicit_flows(line, tainted_vars, instantiated_vars, tainted_sinks):
         
         # Get every var used in the condition
         varsUsedInCond = getComparisonIDs(line["test"])
@@ -425,6 +439,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             for var in varsUsedInCond:
                 if(var not in instantiated_vars):
                     possibleSources[var] = []
+                    print("")
                     
                 elif(var in tainted_vars.vars):
                     s = tainted_vars.get_all_sources_from_var(var)
@@ -449,6 +464,13 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 else:
                     for s in possibleSources:
                         tainted_vars.add_sanitized_flow(var, s, possibleSources[s])
+        
+        # check for body inside conditional
+        if(line["ast_type"] in ["If","While"]):
+            # No need to check in "orelse", as they dont exist after the multitree
+            for l in getLines(line):
+                if(l["ast_type"] in ["If","While"]):
+                    check_for_implicit_flows(l, tainted_vars, instantiated_vars, tainted_sinks)
 
     def check_for_tainted_assignments(assignments, tainted_vars, instantiated_vars, tainted_sinks, clean):
 
@@ -465,7 +487,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             
             add_tainted_vars_to_dict(tainted_vars, instantiated_vars, var_ids, calls, target_ids, tainted_sinks,clean)
             
-            print("tainted vars:",tainted_vars.vars)
+            #print("tainted vars:",tainted_vars.vars)
 
     def check_for_lonely_call_tainting(line, tainted_vars, tainted_sinks, instantiated_vars):
         lonely_calls = getNodesOfType(line, "Call")

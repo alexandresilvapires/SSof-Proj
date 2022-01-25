@@ -35,17 +35,19 @@ def main():
         for t in allTrees:
             caught_this_time = utils.track_taint(t, v["sources"], v["sanitizers"], v["sinks"], v["implicit"] == "yes")
             
+            print("currently caught:", caught)
+            print("caught this time:",caught_this_time)
             for sink in caught_this_time:
+                print("checking sink",sink)
                 if sink in caught:
                     for source in caught_this_time[sink]["source"]:
                         if source in caught[sink]["source"]:
-                            if caught_this_time[sink]["source"][source] not in caught[sink]["source"][source] and caught_this_time[sink]["source"][source] != []:
-                                    caught[sink]["source"][source].append(caught_this_time[sink]["source"][source])
+                            if caught_this_time[sink]["source"][source] not in [caught[sink]["source"][source]] and caught_this_time[sink]["source"][source] != []:
+                                caught[sink]["source"][source].extend(caught_this_time[sink]["source"][source])
                         else:
-                            caught[sink]["source"][source] = [copy.deepcopy(caught_this_time[sink]["source"][source])]
+                            caught[sink]["source"][source] = copy.deepcopy(caught_this_time[sink]["source"][source])
                 else:
                     caught.update({sink: copy.deepcopy(caught_this_time[sink])})
-
 
         for sink in caught:
             sources = caught[sink]["source"]
@@ -53,7 +55,14 @@ def main():
 
             for source in sources:
                 s_flows = sources[source]
-                vuln_counts[vuln_name] += 1       
+                vuln_counts[vuln_name] += 1
+                
+                #TODO: Fix, Nasty
+                if(s_flows == [[]]):
+                    s_flows = []
+                elif(s_flows != []):
+                    s_flows = [s_flows]
+
                 if is_sanitized:
                     caughtVuns.append({"vulnerability":f'{vuln_name}_{vuln_counts[vuln_name]}', "source":source, "sink":sink, 
                                     "unsanitized flows": "no", "sanitized flows": s_flows})
