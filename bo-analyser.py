@@ -1,7 +1,7 @@
 import argparse
 import json
 from ast_utils import getAllTrees, getLines
-
+import copy
 import utils
 
 def main():
@@ -33,9 +33,20 @@ def main():
 
         caught = {}
         for t in allTrees:
-            caught.update(utils.track_taint(t, v["sources"], v["sanitizers"], v["sinks"], v["implicit"] == "yes"))
-        #caught = utils.track_taint(tree, v["sources"], v["sanitizers"], v["sinks"], v["implicit"] == "yes")
-        
+            caught_this_time = utils.track_taint(t, v["sources"], v["sanitizers"], v["sinks"], v["implicit"] == "yes")
+            for sink in caught_this_time:
+                if sink in caught:
+                    for source in caught_this_time[sink]["source"]:
+                        if source in caught[sink]["source"]:
+                            for src in caught_this_time[sink]["source"][source]:
+                                if src not in caught[sink]["source"][source]:
+                                    caught[sink]["source"][source].append(src)
+                        else:
+                            caught[sink]["source"][source] = copy.deepcopy(caught_this_time[sink]["source"][source])
+                else:
+                    caught.update({sink: copy.deepcopy(caught_this_time[sink])})
+
+
         for sink in caught:
             sources = caught[sink]["source"]
             is_sanitized = caught[sink]["is_sanitized"]
