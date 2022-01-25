@@ -10,9 +10,6 @@ def getNodesOfType(tree, type):
     """Returns the a list of nodes with a certain type"""
     nodes = []
 
-    print("analysing tree")
-    print(tree)
-
     #List that contains every type of node the program includes
     #toCheck = ["Constant","Name","Expr","BinOp","Compare","Call","Attribute","Assign","If","While"]
     if(tree["ast_type"] == "Constant"):
@@ -267,8 +264,7 @@ def getAllTrees(tree):
         if(tree["body"][i]["ast_type"] == "If"):
             # A version without the else turns the else body into empty
             withIf = copy.deepcopy(tree)
-            
-            withIf["body"][i]["orselse"] = []
+            withIf["body"][i]["orelse"] = []
             
             # Check for recursive ifs 
             newIfBodies = getAllTrees(withIf["body"][i])
@@ -284,7 +280,7 @@ def getAllTrees(tree):
             # the if body with the else body, and removes the other else body
             withElse = copy.deepcopy(tree)
             
-            withElse["body"][i]["body"] = withElse["body"][i]["orelse"]
+            withElse["body"][i]["body"] = copy.deepcopy(withElse["body"][i]["orelse"])
             withElse["body"][i]["orelse"] = []
             
             # Check for recursive ifs 

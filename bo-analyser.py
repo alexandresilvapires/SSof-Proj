@@ -38,11 +38,10 @@ def main():
                 if sink in caught:
                     for source in caught_this_time[sink]["source"]:
                         if source in caught[sink]["source"]:
-                            for src in caught_this_time[sink]["source"][source]:
-                                if src not in caught[sink]["source"][source]:
-                                    caught[sink]["source"][source].append(src)
+                            if caught_this_time[sink]["source"][source] not in caught[sink]["source"][source]:
+                                    caught[sink]["source"][source].append(caught_this_time[sink]["source"][source])
                         else:
-                            caught[sink]["source"][source] = copy.deepcopy(caught_this_time[sink]["source"][source])
+                            caught[sink]["source"][source] = [copy.deepcopy(caught_this_time[sink]["source"][source])]
                 else:
                     caught.update({sink: copy.deepcopy(caught_this_time[sink])})
 

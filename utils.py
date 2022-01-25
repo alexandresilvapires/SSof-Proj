@@ -456,9 +456,9 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             """ List of target variables, used on the left side of the assignment """
             target_ids = getAssignmentTargets(assignment)
 
-            add_tainted_vars_to_dict(tainted_vars, instantiated_vars, var_ids, calls, target_ids, tainted_sinks,clean)
-            
             update_instantiated_variables(instantiated_vars, target_ids)
+            
+            add_tainted_vars_to_dict(tainted_vars, instantiated_vars, var_ids, calls, target_ids, tainted_sinks,clean)
             
             print("tainted vars:",tainted_vars.vars)
 
