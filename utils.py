@@ -215,7 +215,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                         #! This is slightly wrong.
                         tainted_sinks[callID]["is_sanitized"] = tainted_sinks[callID]["is_sanitized"] and is_sanitized
                     else:
-                        print("---sources", srcs)
                         tainted_sinks[callID] = {
                                                 "source": srcs,
                                                 "is_sanitized": is_sanitized
@@ -344,15 +343,12 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
 
         # in case any source was found, pass taint to the targets
         if sanitized_flows_source != {}:
-            print(sanitized_flows_source)
             for v in target_ids:
                 if v not in tainted_vars.vars:
-                    print("adding to tainted_vars", v)
                     tainted_vars.add_new(v, False, sanitized_flows_source)
                     if v in entry_points:
                         tainted_vars.add_source(v, v)
                 else:
-                    print("else", v)
                     for s in sanitized_flows_source:
                         tainted_vars.add_sanitized_flow(v, s, sanitized_flows_source[s])
                         
