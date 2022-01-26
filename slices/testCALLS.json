@@ -237,7 +237,7 @@
                         },
                         "end_col_offset": 5,
                         "end_lineno": 4,
-                        "id": "b",
+                        "id": "uninitvar",
                         "lineno": 4
                     }],
                 "ast_type": "Call",
