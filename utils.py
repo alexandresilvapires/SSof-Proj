@@ -31,7 +31,7 @@ class taintedVars:
 
     def add_sanitized_flow(self, var_id, source, flow):
         flw = flow if isinstance(flow, list) else [flow]
-        if(not "sources" in self.vars[var_id] or not source in self.vars[var_id]["sources"]):
+        if("sources" not in self.vars[var_id] or not source in self.vars[var_id]["sources"]):
             self.add_source(var_id, source)
         self.vars[var_id]["sources"][source].extend(flw)
         
@@ -191,11 +191,14 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             if var in tainted_vars.vars:
                 s = tainted_vars.get_all_sources_from_var(var)
                 sf = tainted_vars.get_all_sanitized_flows_from_var(var)
-
+        
                 # If the current function is a sanitization function, add it to the sanitized flows
                 if callID in sanitization:
                     sf.append(callID)
-                elif callID in sinks:
+                else:
+                    tainted_vars.set_sanitized(var, False)
+
+                if callID in sinks:
                     #* Big messy boiii
                     is_sanitized = tainted_vars.get_is_sanitized(var)
                     srcs = tainted_vars.get_sources(var)
@@ -212,14 +215,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                         #! This is slightly wrong.
                         tainted_sinks[callID]["is_sanitized"] = tainted_sinks[callID]["is_sanitized"] and is_sanitized
                     else:
-                        #! Might need to add these elsewhere, too
-                        #s_flows_to_add = []
-                        #for src in srcs:
-                        #    for s_flow in srcs[src]:
-                        #        if s_flow not in s_flows_to_add:
-                        #            s_flows_to_add.append(s_flow)
-
-                        # TODO: was {var: s_flows_to_add}, but 'srcs' is correct?
                         print("---sources", srcs)
                         tainted_sinks[callID] = {
                                                 "source": srcs,
@@ -349,15 +344,17 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
 
         # in case any source was found, pass taint to the targets
         if sanitized_flows_source != {}:
+            print(sanitized_flows_source)
             for v in target_ids:
                 if v not in tainted_vars.vars:
+                    print("adding to tainted_vars", v)
                     tainted_vars.add_new(v, False, sanitized_flows_source)
+                    if v in entry_points:
+                        tainted_vars.add_source(v, v)
                 else:
+                    print("else", v)
                     for s in sanitized_flows_source:
                         tainted_vars.add_sanitized_flow(v, s, sanitized_flows_source[s])
-                
-                if v in entry_points:
-                    tainted_vars.add_source(v, v)
                         
             # Update the attributed var's sanitization
             attribSanitization = 0  # Var or call being attributed increases the counter
