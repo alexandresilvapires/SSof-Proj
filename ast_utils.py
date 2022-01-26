@@ -128,8 +128,6 @@ def getCallID(tree):
 def getAssignmentCalls(tree):
     """ Given a tree that is an assignment, returns the list of calls (Not considering chained functions) """
         
-    # Terrible way to do this, get every named node, get every name that is from a function
-    # and return the remaining names
     calls = []
 
     if(tree["ast_type"] == "Call"):
@@ -209,8 +207,6 @@ def getComparisonIDs(tree):
     """ Given a tree, returns the list of variable ids used
         in the assignment, INCLUDING VARS USED AS FUNCTION ARGS"""
         
-    # Terrible way to do this, get every named node, get every name that is from a function
-    # and return the remaining names
     names = []
     
     funcCalls = getNodesOfType(tree, "Call")
@@ -235,19 +231,22 @@ def popLineFromTree(tree, line):
             if(tree["body"][i] == line):
                 tree["body"].pop(i)
                 return True, i, tree
+            
             elif(tree["body"][i]["ast_type"] == "If"):
+                
                 inIf, newI, _ = popLineFromTreeAux(tree["body"][i], line)
                 inElse, newI, _ = popLineFromTreeAux(tree["orelse"][i], line)
+                
                 if(inIf):
-                    #tree["body"][i]["body"].pop(newI)
                     return True, newI, tree
                 elif(inElse):
-                    #tree["body"][i]["orelse"].pop(newI)
                     return True, newI, tree
+                
             elif(tree["body"][i]["ast_type"] == "While"):
+                
                 inWhile, newI, _ = popLineFromTreeAux(tree["body"][i], line)
+                
                 if(inWhile):
-                    #tree["body"][i]["body"].pop(newI)
                     return True, newI, tree
                     
         return False, -1, tree
