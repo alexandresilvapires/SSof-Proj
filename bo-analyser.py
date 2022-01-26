@@ -28,17 +28,11 @@ def main():
         vuln_name = v["vulnerability"]
         vuln_counts[vuln_name] = 0
 
-        print("-- Testing program for vulnerability", vuln_name, "--")
-        print("-- Checking information flows --\n")
-
         caught = {}
         for t in allTrees:
             caught_this_time = utils.track_taint(t, v["sources"], v["sanitizers"], v["sinks"], v["implicit"] == "yes")
-            
-            print("currently caught:", caught)
-            print("caught this time:",caught_this_time)
+
             for sink in caught_this_time:
-                print("checking sink",sink)
                 if sink in caught:
                     for source in caught_this_time[sink]["source"]:
                         if source in caught[sink]["source"]:
@@ -57,7 +51,7 @@ def main():
                 s_flows = sources[source]
                 vuln_counts[vuln_name] += 1
                 
-                #TODO: Fix, Nasty
+                # Uniformization for input, and final sanity check 
                 if(s_flows == [[]]):
                     s_flows = []
                 elif(s_flows != []):
@@ -73,9 +67,7 @@ def main():
                     caughtVuns.append({"vulnerability":f'{vuln_name}_{vuln_counts[vuln_name]}', "source":source, "sink":sink, 
                                     "unsanitized flows": "yes", "sanitized flows": s_flows})
 
-    print("----- Final Results -----")
-    for vuln in caughtVuns:
-        print(vuln)
+    print(caughtVuns)
 
 if __name__ == '__main__':
     main()
