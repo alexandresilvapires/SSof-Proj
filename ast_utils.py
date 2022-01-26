@@ -295,18 +295,28 @@ def getAllTrees(tree):
         # If we have a while, we duplicate the body to unroll the loop and check all the subtrees the body can have
         elif(tree["body"][i]["ast_type"] == "While"):
             withWhile = copy.deepcopy(tree)
+            withTwoWhiles = copy.deepcopy(tree)
             
-            # Unroll the loop
-            withWhile["body"][i]["body"].extend(getLines(withWhile["body"][i]))
-
+            # Unroll the loop - make a version with and another without the double body
+            withTwoWhiles["body"][i]["body"].extend(getLines(withTwoWhiles["body"][i]))
+            
             subtrees = getAllTrees(withWhile["body"][i])
             for st in subtrees:
                 newTree = copy.deepcopy(withWhile)
                 newTree["body"][i] = st
                 trees.append(newTree)
-            
+                
             if(subtrees == []):
                 trees.append(withWhile)
+
+            subtrees = getAllTrees(withTwoWhiles["body"][i])
+            for st in subtrees:
+                newTree = copy.deepcopy(withTwoWhiles)
+                newTree["body"][i] = st
+                trees.append(newTree)
+            
+            if(subtrees == []):
+                trees.append(withTwoWhiles)
                 
             # add subtree without while
             newTree = copy.deepcopy(tree)

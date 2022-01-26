@@ -63,6 +63,9 @@ def main():
                 elif(s_flows != []):
                     s_flows = [s_flows]
 
+                if(is_sanitized and s_flows == []):
+                    is_sanitized = False
+
                 if is_sanitized:
                     caughtVuns.append({"vulnerability":f'{vuln_name}_{vuln_counts[vuln_name]}', "source":source, "sink":sink, 
                                     "unsanitized flows": "no", "sanitized flows": s_flows})

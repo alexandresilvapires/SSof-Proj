@@ -2,6 +2,7 @@
 
 # JSON Program utils
 
+from ctypes.wintypes import VARIANT_BOOL
 from inspect import getcallargs
 from sre_constants import CALL
 from ast_utils import *
@@ -297,6 +298,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         """
         
         sanitized_flows_source = {}
+        
 
         # Update unitialized vars in case only constants are being assigned
         if(var_ids == [] and calls == []):
@@ -309,9 +311,9 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             if(v in entry_points):
                 tainted_vars.add_new(v, False, {v:[]})
                 sanitized_flows_source[v] = []
+                
 
         # Track sources and their sanitized flows for both vars and calls in assigned value
-        
         for v in var_ids:
             # Add uninstantiated vars to the list 
             if v not in instantiated_vars and v not in tainted_vars.vars:
@@ -330,7 +332,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 if v not in tainted_vars.vars:
                     tainted_vars.add_new(v, False, {v:[]})
                     sanitized_flows_source[v] = []
-
         for call in calls:
             callID = getCallID(call)
 
@@ -340,7 +341,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
 
             # check if it is sanitization
             sanitized_flows_source.update(get_sources_sanitflows_from_call(call, tainted_vars, instantiated_vars, tainted_sinks))
-
         # in case any source was found, pass taint to the targets
         if sanitized_flows_source != {}:
             for v in target_ids:
@@ -417,6 +417,9 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         
         print("run implicit: ", temporary_instantiated_vars)
         
+        assignments = getNodesOfType(line, "Assign")
+        check_for_tainted_assignments(assignments, tainted_vars, instantiated_vars, tainted_sinks, False)
+        
         # If a tainted var is used in the comparison, we can consider every following 
         # step that leads to a sink an implicit flow
         
@@ -432,6 +435,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 possiblyImplicit = True
                 
         if(possiblyImplicit):
+            
             for var in varsUsedInCond:
                 # TODO problem here: ao fazer chained ifs, isto vai considerar vars que podem ter sido instantiated como uninstanciated
                 # solução: Temporary list of instanciated vars
@@ -463,7 +467,6 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
                 target_ids = getAssignmentTargets(a)
                 for t in target_ids:
                     if(t not in temporary_instantiated_vars):
-                        print("- Added to instantiated vars:",t)
                         temporary_instantiated_vars.append(t)
             
             
@@ -478,6 +481,7 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         if(line["ast_type"] in ["If","While"]):
             # No need to check in "orelse", as they dont exist after the multitree
             for l in getLines(line):
+
                 if(l["ast_type"] in ["If","While"]):
                     check_for_implicit_flows(l, tainted_vars, temporary_instantiated_vars, tainted_sinks, temporary_instantiated_vars)
 
@@ -495,8 +499,8 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
             update_instantiated_variables(instantiated_vars, target_ids)
             
             add_tainted_vars_to_dict(tainted_vars, instantiated_vars, var_ids, calls, target_ids, tainted_sinks,clean)
-            
             #print("tainted vars:",tainted_vars.vars)
+            
 
     def check_for_lonely_call_tainting(line, tainted_vars, tainted_sinks, instantiated_vars):
         lonely_calls = getNodesOfType(line, "Call")
@@ -533,8 +537,11 @@ def track_taint(tree, entry_points, sanitization, sinks, checkImplicit):
         if(checkImplicit):
             if(line["ast_type"] == "If" or line["ast_type"] == "While"):
                 clean_untainted_targets = False
+                print("tainted vars:11111111111111",tainted_vars.vars)
                 check_for_implicit_flows(line, tainted_vars=tainted_vars, instantiated_vars=instantiated_vars, 
                                                 tainted_sinks=tainted_sinks, temporary_instantiated_vars=[])
+                
+                print("tainted vars:2222",tainted_vars.vars)
         
         # Also check for explicit flows
         assignments = getNodesOfType(line, "Assign")
