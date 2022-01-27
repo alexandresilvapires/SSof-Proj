@@ -18,6 +18,13 @@ python3 bo-analyser.py 5b-loops-unfolding.py.json 5b-patterns.json
 
 ---
 
+Necessary modules:
+
+Our tool needs the following python modules to be able to run:
+'json', 'copy' and 'argparse' 
+
+---
+
 Tool organization:
 
 The tool contains two utility modules containing methods used to aid the static analysis.
